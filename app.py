@@ -758,4 +758,9 @@ def render_chat_messages():
                     <div class="speaker-header">
                         <span class="speaker-name">C{i+1} ({config.persona_c})</span>
                     </div>
-                    <div class
+                    <div class="message-content">
+                        {st.session_state.dialog_c[i]}
+                    </div>
+                </div>
+            </div>
+            """, unsafe_
