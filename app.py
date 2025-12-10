@@ -50,11 +50,12 @@ class RPGState:
     damage_history: List[Dict] = field(default_factory=list)
 
 @dataclass
-class TurnState:
-    current_turn: str = "A"  # A, B, C, hoặc USER
+class DebateState:
+    current_turn: str = "A"
     turn_count: int = 0
-    message_index: int = 0
     is_fast_mode: bool = False
+    is_auto_playing: bool = False
+    current_display_index: int = 0
 
 # --- Khởi tạo Session State ---
 def init_session_state():
@@ -77,8 +78,8 @@ def init_session_state():
     if "suggested_topics" not in st.session_state:
         st.session_state.suggested_topics = None
     
-    if "turn_state" not in st.session_state:
-        st.session_state.turn_state = TurnState()
+    if "debate_state" not in st.session_state:
+        st.session_state.debate_state = DebateState()
     
     if "debate_running" not in st.session_state:
         st.session_state.debate_running = False
@@ -103,6 +104,9 @@ def init_session_state():
     
     if "debate_started" not in st.session_state:
         st.session_state.debate_started = False
+    
+    if "debate_finished" not in st.session_state:
+        st.session_state.debate_finished = False
 
 # Gọi khởi tạo
 init_session_state()
@@ -123,7 +127,7 @@ def get_api_client():
             api_key=OPENAI_API_KEY
         )
     else:
-        # Fallback: thử Github trước, rồi OpenAI
+        # Fallback
         if GITHUB_TOKEN:
             return OpenAI(
                 base_url="https://models.github.ai/inference",
@@ -170,58 +174,32 @@ def generate_opening_statements() -> Tuple[str, str, str]:
     
     prompt = f"""
     Tạo lời mở đầu cho cuộc tranh luận về chủ đề: {topic}
-    
     Phong cách: {config.style if not config.custom_style else config.custom_style}
     
-    Yêu cầu:
-    1. A ({config.persona_a}): Ủng hộ chủ đề, 3-4 câu
-    2. B ({config.persona_b}): Phản đối chủ đề, 3-4 câu
+    A ({config.persona_a}): Ủng hộ chủ đề, 3-4 câu
+    B ({config.persona_b}): Phản đối chủ đề, 3-4 câu
     """
     
     if config.mode == "Tham gia 3 bên (Thành viên C)":
-        prompt += f"3. C ({config.persona_c}): Quan điểm trung lập/đa chiều, 3-4 câu\n"
+        prompt += f"C ({config.persona_c}): Quan điểm trung lập, 3-4 câu\n"
     
     response = call_chat([{"role": "user", "content": prompt}])
     
     # Parse response
-    a_opening = ""
-    b_opening = ""
-    c_opening = ""
-    
-    # Try to extract using patterns
-    patterns = [
-        r'A[:\-]?\s*(.*?)(?:\n\n|\nB|$)',
-        r'B[:\-]?\s*(.*?)(?:\n\n|\nC|$)',
-        r'C[:\-]?\s*(.*?)(?:\n\n|$)'
-    ]
-    
     import re
     
-    a_match = re.search(patterns[0], response, re.DOTALL | re.IGNORECASE)
-    if a_match:
-        a_opening = a_match.group(1).strip()
+    # Tìm các phần bằng regex
+    a_match = re.search(r'A[:\-]?\s*(.*?)(?:\n\n|\nB|$)', response, re.DOTALL | re.IGNORECASE)
+    b_match = re.search(r'B[:\-]?\s*(.*?)(?:\n\n|\nC|$)', response, re.DOTALL | re.IGNORECASE)
+    c_match = re.search(r'C[:\-]?\s*(.*?)(?:\n\n|$)', response, re.DOTALL | re.IGNORECASE)
     
-    b_match = re.search(patterns[1], response, re.DOTALL | re.IGNORECASE)
-    if b_match:
-        b_opening = b_match.group(1).strip()
-    
-    if config.mode == "Tham gia 3 bên (Thành viên C)":
-        c_match = re.search(patterns[2], response, re.DOTALL | re.IGNORECASE)
-        if c_match:
-            c_opening = c_match.group(1).strip()
-    
-    # Fallback: split by lines
-    if not a_opening or not b_opening:
-        lines = [line.strip() for line in response.split('\n') if line.strip()]
-        if len(lines) >= 2:
-            a_opening = lines[0].replace('A:', '').replace('A-', '').strip()
-            b_opening = lines[1].replace('B:', '').replace('B-', '').strip()
-            if len(lines) >= 3 and config.mode == "Tham gia 3 bên (Thành viên C)":
-                c_opening = lines[2].replace('C:', '').replace('C-', '').strip()
+    a_opening = a_match.group(1).strip() if a_match else "Xin chào, tôi ủng hộ chủ đề này."
+    b_opening = b_match.group(1).strip() if b_match else "Tôi phản đối chủ đề này."
+    c_opening = c_match.group(1).strip() if c_match and config.mode == "Tham gia 3 bên (Thành viên C)" else ""
     
     return a_opening, b_opening, c_opening
 
-def generate_ai_reply(speaker: str, last_message: str) -> str:
+def generate_ai_reply(speaker: str, context: str = "") -> str:
     """Tạo câu trả lời cho AI"""
     config = st.session_state.config
     
@@ -229,240 +207,400 @@ def generate_ai_reply(speaker: str, last_message: str) -> str:
         persona = config.persona_a
         role = "Ủng hộ"
         opponent = config.persona_b
-    elif speaker == "B":
+    else:  # speaker == "B"
         persona = config.persona_b
         role = "Phản đối"
         opponent = config.persona_a
-    else:
-        return "Lỗi: Speaker không hợp lệ"
     
     prompt = f"""
-    Bạn đang đóng vai {persona} ({role}) trong cuộc tranh luận.
-    Phong cách: {config.style if not config.custom_style else config.custom_style}
+    Bạn là {persona} ({role}) trong tranh luận.
     Chủ đề: {st.session_state.topic_used}
+    Phong cách: {config.style if not config.custom_style else config.custom_style}
     
-    Người vừa nói ({opponent}): "{last_message[:300]}"
+    {context}
     
-    Hãy trả lời một cách ngắn gọn, sắc bén (3-5 câu) theo đúng tính cách {persona}.
+    Hãy trả lời ngắn gọn, sắc bén (3-5 câu) theo tính cách {persona}.
     """
     
     return call_chat([{"role": "user", "content": prompt}])
 
-def process_rpg_damage(attacker: str, defender: str, message: str):
-    """Xử lý sát thương RPG"""
+def calculate_rpg_damage(message: str, attacker: str, defender: str) -> Dict:
+    """Tính toán sát thương RPG"""
+    # Độ dài tin nhắn ảnh hưởng đến damage
+    length_factor = min(1.0, len(message) / 500)
+    
+    # Tính điểm "chất lượng" dựa trên từ khóa
+    quality_keywords = ["logic", "chứng minh", "bằng chứng", "thực tế", "khoa học", "thuyết phục"]
+    quality_score = sum(1 for keyword in quality_keywords if keyword.lower() in message.lower())
+    quality_factor = 1 + (quality_score * 0.2)
+    
+    # Damage cơ bản
+    base_damage = random.randint(8, 15)
+    final_damage = int(base_damage * length_factor * quality_factor)
+    
+    # Cơ hội chí mạng 15%
+    is_crit = random.random() < 0.15
+    if is_crit:
+        final_damage = int(final_damage * 1.8)
+    
+    # Giới hạn damage
+    final_damage = max(5, min(35, final_damage))
+    
+    attacker_name = st.session_state.config.persona_a if attacker == "A" else st.session_state.config.persona_b
+    defender_name = st.session_state.config.persona_a if defender == "A" else st.session_state.config.persona_b
+    
+    reasons = [
+        "Lập luận sắc bén",
+        "Dẫn chứng thuyết phục",
+        "Phản biện logic",
+        "Chỉ ra điểm yếu",
+        "Đưa ra giải pháp"
+    ]
+    
+    return {
+        "damage": final_damage,
+        "is_crit": is_crit,
+        "reason": random.choice(reasons),
+        "attacker": attacker_name,
+        "defender": defender_name
+    }
+
+def apply_rpg_damage(attacker: str, defender: str, message: str):
+    """Áp dụng sát thương RPG"""
     if st.session_state.config.mode != "Chế độ RPG (Game Tranh luận)":
         return
     
-    # Tính damage dựa trên độ dài và phức tạp của message
-    base_damage = min(25, len(message) // 10)
-    
-    # Thêm yếu tố ngẫu nhiên
-    damage_variation = random.randint(-5, 10)
-    final_damage = max(5, base_damage + damage_variation)
-    
-    # Có 15% cơ hội chí mạng
-    is_crit = random.random() < 0.15
-    if is_crit:
-        final_damage = min(40, final_damage * 2)
+    damage_data = calculate_rpg_damage(message, attacker, defender)
     
     # Áp dụng damage
     if defender == "A":
-        st.session_state.rpg_state.hp_a = max(0, st.session_state.rpg_state.hp_a - final_damage)
-        defender_name = st.session_state.config.persona_a
+        st.session_state.rpg_state.hp_a = max(0, st.session_state.rpg_state.hp_a - damage_data["damage"])
     else:
-        st.session_state.rpg_state.hp_b = max(0, st.session_state.rpg_state.hp_b - final_damage)
-        defender_name = st.session_state.config.persona_b
-    
-    attacker_name = st.session_state.config.persona_a if attacker == "A" else st.session_state.config.persona_b
+        st.session_state.rpg_state.hp_b = max(0, st.session_state.rpg_state.hp_b - damage_data["damage"])
     
     # Ghi log
-    crit_text = "🔥 **CHÍ MẠNG!** " if is_crit else ""
-    log_msg = f"⚔️ **{attacker_name}** → **{defender_name}**: {crit_text}-{final_damage} HP"
+    crit_text = "🔥 **CHÍ MẠNG!** " if damage_data["is_crit"] else ""
+    log_msg = f"{damage_data['attacker']} → {damage_data['defender']}: {crit_text}-{damage_data['damage']} HP ({damage_data['reason']})"
     st.session_state.rpg_state.log.append(log_msg)
     
-    st.session_state.rpg_state.damage_history.append({
-        "turn": st.session_state.turn_state.turn_count,
-        "attacker": attacker,
-        "defender": defender,
-        "damage": final_damage,
-        "is_crit": is_crit,
-        "message": message[:100]
-    })
+    # Giới hạn log
+    if len(st.session_state.rpg_state.log) > 10:
+        st.session_state.rpg_state.log = st.session_state.rpg_state.log[-10:]
 
-def next_turn():
-    """Chuyển sang lượt tiếp theo"""
+def check_victory() -> Tuple[bool, str]:
+    """Kiểm tra điều kiện chiến thắng"""
     config = st.session_state.config
-    turn_state = st.session_state.turn_state
-    
-    if config.mode == "Tranh luận 1v1 với AI":
-        # A → USER → A → USER ...
-        if turn_state.current_turn == "A":
-            turn_state.current_turn = "USER_B"
-        else:
-            turn_state.current_turn = "A"
-    
-    elif config.mode == "Tham gia 3 bên (Thành viên C)":
-        # A → B → C(USER) → A → B → C(USER) ...
-        if turn_state.current_turn == "A":
-            turn_state.current_turn = "B"
-        elif turn_state.current_turn == "B":
-            turn_state.current_turn = "USER_C"
-        else:
-            turn_state.current_turn = "A"
-    
-    elif config.mode == "Chế độ RPG (Game Tranh luận)":
-        # A → B → A → B ...
-        turn_state.current_turn = "B" if turn_state.current_turn == "A" else "A"
-    
-    else:  # Tranh luận 2 AI (Tiêu chuẩn)
-        # A → B → A → B ...
-        turn_state.current_turn = "B" if turn_state.current_turn == "A" else "A"
-    
-    turn_state.turn_count += 1
-    turn_state.message_index = len(st.session_state.dialog_a) + len(st.session_state.dialog_b) + len(st.session_state.dialog_c)
-
-def execute_ai_turn(speaker: str):
-    """Thực thi lượt của AI"""
-    config = st.session_state.config
-    
-    # Xác định tin nhắn cuối cùng của đối thủ
-    if speaker == "A":
-        last_message = st.session_state.dialog_b[-1] if st.session_state.dialog_b else ""
-        new_message = generate_ai_reply("A", last_message)
-        st.session_state.dialog_a.append(new_message)
-        
-        # Xử lý RPG damage nếu cần
-        if config.mode == "Chế độ RPG (Game Tranh luận)" and last_message:
-            process_rpg_damage("A", "B", new_message)
-    
-    elif speaker == "B":
-        last_message = st.session_state.dialog_a[-1] if st.session_state.dialog_a else ""
-        new_message = generate_ai_reply("B", last_message)
-        st.session_state.dialog_b.append(new_message)
-        
-        # Xử lý RPG damage nếu cần
-        if config.mode == "Chế độ RPG (Game Tranh luận)" and last_message:
-            process_rpg_damage("B", "A", new_message)
-    
-    # Chuyển lượt
-    next_turn()
-
-def execute_user_turn(user_role: str, message: str):
-    """Thực thi lượt của người dùng"""
-    if user_role == "USER_B":
-        st.session_state.dialog_b.append(message)
-    elif user_role == "USER_C":
-        st.session_state.dialog_c.append(message)
-    
-    # Xử lý RPG damage nếu người dùng là B trong chế độ RPG
-    config = st.session_state.config
-    if config.mode == "Chế độ RPG (Game Tranh luận)" and user_role == "USER_B":
-        process_rpg_damage("B", "A", message)
-    
-    # Chuyển lượt
-    next_turn()
-    
-    # Nếu là chế độ 1v1 và chưa đủ rounds, AI tự động trả lời
-    if config.mode == "Tranh luận 1v1 với AI":
-        if len(st.session_state.dialog_a) < config.rounds:
-            with st.spinner(f"{config.persona_a} đang suy nghĩ..."):
-                execute_ai_turn("A")
-        else:
-            st.session_state.debate_running = False
-    
-    # Nếu là chế độ 3 bên và chưa đủ rounds, A và B tự động trả lời
-    elif config.mode == "Tham gia 3 bên (Thành viên C)":
-        if len(st.session_state.dialog_a) < config.rounds:
-            with st.spinner(f"{config.persona_a} và {config.persona_b} đang tranh luận..."):
-                execute_ai_turn("A")
-                if len(st.session_state.dialog_b) < config.rounds:
-                    execute_ai_turn("B")
-        else:
-            st.session_state.debate_running = False
-
-def check_game_over() -> Tuple[bool, str]:
-    """Kiểm tra xem trò chơi đã kết thúc chưa"""
-    config = st.session_state.config
-    rpg_state = st.session_state.rpg_state
     
     if config.mode == "Chế độ RPG (Game Tranh luận)":
-        if rpg_state.hp_a <= 0 and rpg_state.hp_b <= 0:
-            return True, "🏳️ HÒA! Cả hai đều hết máu."
-        elif rpg_state.hp_a <= 0:
-            return True, f"🏆 {config.persona_b} CHIẾN THẮNG!"
-        elif rpg_state.hp_b <= 0:
-            return True, f"🏆 {config.persona_a} CHIẾN THẮNG!"
+        rpg = st.session_state.rpg_state
+        
+        if rpg.hp_a <= 0 and rpg.hp_b <= 0:
+            return True, f"🏳️ **HÒA!** Cả {config.persona_a} và {config.persona_b} đều hết máu."
+        elif rpg.hp_a <= 0:
+            return True, f"🏆 **{config.persona_b} CHIẾN THẮNG!**"
+        elif rpg.hp_b <= 0:
+            return True, f"🏆 **{config.persona_a} CHIẾN THẮNG!**"
     
-    # Kiểm tra số lượt đã đạt
+    # Kiểm tra nếu đã đủ số rounds
     if len(st.session_state.dialog_a) >= config.rounds:
         if config.mode == "Tranh luận 2 AI (Tiêu chuẩn)":
             if len(st.session_state.dialog_b) >= config.rounds:
-                return True, "✅ Tranh luận đã hoàn thành!"
+                return True, "✅ **Tranh luận đã hoàn thành!**"
         elif config.mode == "Tranh luận 1v1 với AI":
             if len(st.session_state.dialog_b) >= config.rounds:
-                return True, "✅ Tranh luận đã hoàn thành!"
-        elif config.mode == "Tham gia 3 bên (Thành viên C)":
-            if len(st.session_state.dialog_b) >= config.rounds and len(st.session_state.dialog_c) >= config.rounds:
-                return True, "✅ Tranh luận đã hoàn thành!"
+                return True, "✅ **Tranh luận đã hoàn thành!**"
         elif config.mode == "Chế độ RPG (Game Tranh luận)":
             if len(st.session_state.dialog_b) >= config.rounds:
-                return True, "✅ Tranh luận đã hoàn thành!"
+                return True, "✅ **Tranh luận đã hoàn thành!**"
+        elif config.mode == "Tham gia 3 bên (Thành viên C)":
+            if len(st.session_state.dialog_b) >= config.rounds and len(st.session_state.dialog_c) >= config.rounds:
+                return True, "✅ **Tranh luận đã hoàn thành!**"
     
     return False, ""
 
-# --- UI Components ---
-def render_hp_bars():
-    """Hiển thị thanh HP cho chế độ RPG"""
-    config = st.session_state.config
-    rpg_state = st.session_state.rpg_state
+def get_advantage_status() -> str:
+    """Trả về trạng thái ưu thế hiện tại"""
+    if st.session_state.config.mode != "Chế độ RPG (Game Tranh luận)":
+        return ""
     
+    rpg = st.session_state.rpg_state
+    config = st.session_state.config
+    
+    if rpg.hp_a > rpg.hp_b:
+        diff = rpg.hp_a - rpg.hp_b
+        return f"🟢 **{config.persona_a} đang thắng thế** (+{diff} HP)"
+    elif rpg.hp_b > rpg.hp_a:
+        diff = rpg.hp_b - rpg.hp_a
+        return f"🔴 **{config.persona_b} đang thắng thế** (+{diff} HP)"
+    else:
+        return "🟡 **Hai bên ngang nhau**"
+
+def add_ai_turn():
+    """Thêm một lượt tranh luận AI"""
+    config = st.session_state.config
+    
+    if not st.session_state.dialog_a:
+        # Khởi tạo lượt đầu tiên
+        a_open, b_open, c_open = generate_opening_statements()
+        st.session_state.dialog_a.append(a_open)
+        
+        if config.mode != "Tranh luận 1v1 với AI":
+            st.session_state.dialog_b.append(b_open)
+            if config.mode == "Tham gia 3 bên (Thành viên C)":
+                st.session_state.dialog_c.append(c_open)
+            
+            # Áp dụng RPG damage nếu cần
+            if config.mode == "Chế độ RPG (Game Tranh luận)":
+                apply_rpg_damage("A", "B", a_open)
+                apply_rpg_damage("B", "A", b_open)
+    else:
+        # Thêm lượt mới
+        last_b = st.session_state.dialog_b[-1] if st.session_state.dialog_b else ""
+        reply_a = generate_ai_reply("A", f"Đối thủ vừa nói: {last_b}")
+        st.session_state.dialog_a.append(reply_a)
+        
+        if config.mode == "Chế độ RPG (Game Tranh luận)" and last_b:
+            apply_rpg_damage("A", "B", reply_a)
+        
+        if config.mode != "Tranh luận 1v1 với AI":
+            reply_b = generate_ai_reply("B", f"Đối thủ vừa nói: {reply_a}")
+            st.session_state.dialog_b.append(reply_b)
+            
+            if config.mode == "Chế độ RPG (Game Tranh luận)":
+                apply_rpg_damage("B", "A", reply_b)
+
+# --- UI Components ---
+def render_hp_display():
+    """Hiển thị thanh HP và nhật ký"""
+    config = st.session_state.config
+    rpg = st.session_state.rpg_state
+    
+    if config.mode != "Chế độ RPG (Game Tranh luận)":
+        return
+    
+    st.markdown("---")
+    st.subheader("⚔️ Thông số trận đấu")
+    
+    # Hiển thị thông tin dạng danh sách
     col1, col2 = st.columns(2)
     
     with col1:
-        hp_color = "#4cd964" if rpg_state.hp_a > 50 else ("#ff9500" if rpg_state.hp_a > 25 else "#ff3b30")
-        st.markdown(f"**{config.persona_a}** ({rpg_state.hp_a} HP)")
+        st.markdown(f"**{config.persona_a}:** {rpg.hp_a} HP")
+        # Thanh HP
+        hp_percent_a = max(0, rpg.hp_a)
+        hp_color_a = "#4cd964" if hp_percent_a > 70 else ("#ff9500" if hp_percent_a > 30 else "#ff3b30")
         st.markdown(f"""
-        <div style="background-color: #1e2d42; border-radius: .35rem; height: 1.8rem; overflow: hidden; border: 2px solid {hp_color};">
-            <div style="height: 100%; width: {rpg_state.hp_a}%; background: linear-gradient(to right, {hp_color}, {hp_color}cc); 
+        <div style="background-color: #1e2d42; border-radius: .35rem; height: 1.8rem; overflow: hidden; margin: 5px 0;">
+            <div style="height: 100%; width: {hp_percent_a}%; background: linear-gradient(to right, {hp_color_a}, {hp_color_a}cc); 
                         display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">
-                {rpg_state.hp_a}%
+                {hp_percent_a}%
             </div>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
-        hp_color = "#4cd964" if rpg_state.hp_b > 50 else ("#ff9500" if rpg_state.hp_b > 25 else "#ff3b30")
-        st.markdown(f"**{config.persona_b}** ({rpg_state.hp_b} HP)")
+        st.markdown(f"**{config.persona_b}:** {rpg.hp_b} HP")
+        # Thanh HP
+        hp_percent_b = max(0, rpg.hp_b)
+        hp_color_b = "#4cd964" if hp_percent_b > 70 else ("#ff9500" if hp_percent_b > 30 else "#ff3b30")
         st.markdown(f"""
-        <div style="background-color: #1e2d42; border-radius: .35rem; height: 1.8rem; overflow: hidden; border: 2px solid {hp_color};">
-            <div style="height: 100%; width: {rpg_state.hp_b}%; background: linear-gradient(to right, {hp_color}, {hp_color}cc); 
+        <div style="background-color: #1e2d42; border-radius: .35rem; height: 1.8rem; overflow: hidden; margin: 5px 0;">
+            <div style="height: 100%; width: {hp_percent_b}%; background: linear-gradient(to right, {hp_color_b}, {hp_color_b}cc); 
                         display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">
-                {rpg_state.hp_b}%
+                {hp_percent_b}%
             </div>
         </div>
         """, unsafe_allow_html=True)
+    
+    # Hiển thị trạng thái ưu thế
+    advantage = get_advantage_status()
+    if advantage:
+        st.info(advantage)
+    
+    # Nhật ký chiến đấu
+    if rpg.log:
+        st.markdown("**📜 Nhật ký chiến đấu:**")
+        for log in reversed(rpg.log[-5:]):  # Hiển thị 5 log gần nhất
+            st.write(f"- {log}")
+    
+    st.markdown("---")
 
-def render_chat_message(speaker: str, message: str, index: int):
-    """Hiển thị một tin nhắn trong chat"""
+def render_control_buttons():
+    """Hiển thị các nút điều khiển"""
     config = st.session_state.config
     
-    if speaker == "A":
-        name = config.persona_a
-        css_class = "chat-left"
-    elif speaker == "B":
-        name = config.persona_b
-        css_class = "chat-right"
-    else:  # C
-        name = config.persona_c
-        css_class = "chat-user"
+    col1, col2, col3, col4 = st.columns(4)
     
-    st.markdown(f"""
-    <div class="chat-container">
-        <div class="chat-bubble {css_class}">
-            <b>{speaker}{index+1} ({name}):</b> {message}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    with col1:
+        if st.button("▶️ Tiếp tục", use_container_width=True, 
+                    disabled=st.session_state.debate_finished):
+            if not st.session_state.debate_started:
+                # Bắt đầu debate
+                with st.spinner("Đang khởi tạo..."):
+                    st.session_state.debate_started = True
+                    add_ai_turn()
+            else:
+                # Thêm lượt mới
+                with st.spinner("Đang thêm lượt tranh luận..."):
+                    add_ai_turn()
+            
+            # Kiểm tra chiến thắng
+            is_victory, victory_msg = check_victory()
+            if is_victory:
+                st.session_state.debate_finished = True
+                st.session_state.debate_running = False
+            
+            st.rerun()
+    
+    with col2:
+        # Tính năng tua nhanh
+        if st.session_state.debate_state.is_fast_mode:
+            if st.button("⏸️ Dừng tua", use_container_width=True):
+                st.session_state.debate_state.is_fast_mode = False
+                st.rerun()
+        else:
+            if st.button("⏩ Tua nhanh", use_container_width=True, 
+                        disabled=st.session_state.debate_finished):
+                st.session_state.debate_state.is_fast_mode = True
+                
+                # Tua nhanh đến khi đủ rounds
+                target_rounds = config.rounds
+                current_rounds = len(st.session_state.dialog_a)
+                
+                with st.spinner(f"Đang tua nhanh đến {target_rounds} lượt..."):
+                    while len(st.session_state.dialog_a) < target_rounds:
+                        add_ai_turn()
+                        time.sleep(0.1)
+                
+                st.session_state.debate_state.is_fast_mode = False
+                st.session_state.debate_finished = True
+                st.rerun()
+    
+    with col3:
+        # Thêm 1 lượt (chỉ hiển thị khi debate đã tạm dừng)
+        if st.session_state.debate_started and not st.session_state.debate_finished:
+            if st.button("➕ Thêm 1 lượt", use_container_width=True):
+                with st.spinner("Đang thêm lượt..."):
+                    add_ai_turn()
+                    
+                    # Kiểm tra chiến thắng
+                    is_victory, victory_msg = check_victory()
+                    if is_victory:
+                        st.session_state.debate_finished = True
+                        st.session_state.debate_running = False
+                    
+                    st.rerun()
+    
+    with col4:
+        if st.button("🔄 Làm mới", use_container_width=True):
+            st.session_state.debate_finished = False
+            st.session_state.debate_running = True
+            st.rerun()
+
+def render_chat_messages():
+    """Hiển thị các tin nhắn trong chat"""
+    config = st.session_state.config
+    
+    # Xác định số tin nhắn cần hiển thị
+    if st.session_state.debate_state.is_fast_mode:
+        display_count = max(len(st.session_state.dialog_a), 
+                           len(st.session_state.dialog_b),
+                           len(st.session_state.dialog_c))
+    else:
+        display_count = st.session_state.debate_state.current_display_index + 1
+        display_count = min(display_count, 
+                          max(len(st.session_state.dialog_a), 
+                              len(st.session_state.dialog_b),
+                              len(st.session_state.dialog_c)))
+    
+    # Hiển thị từng tin nhắn
+    for i in range(display_count):
+        if i < len(st.session_state.dialog_a):
+            st.markdown(f"""
+            <div class="chat-container">
+                <div class="chat-bubble chat-left">
+                    <b>A{i+1} ({config.persona_a}):</b> {st.session_state.dialog_a[i]}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        if i < len(st.session_state.dialog_b):
+            st.markdown(f"""
+            <div class="chat-container" style="justify-content: flex-end;">
+                <div class="chat-bubble chat-right">
+                    <b>B{i+1} ({config.persona_b}):</b> {st.session_state.dialog_b[i]}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        if i < len(st.session_state.dialog_c) and config.mode == "Tham gia 3 bên (Thành viên C)":
+            st.markdown(f"""
+            <div class="chat-container" style="justify-content: center;">
+                <div class="chat-bubble chat-user">
+                    <b>C{i+1} ({config.persona_c}):</b> {st.session_state.dialog_c[i]}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Tự động tăng display index nếu chưa ở fast mode
+        if not st.session_state.debate_state.is_fast_mode and i == st.session_state.debate_state.current_display_index:
+            st.session_state.debate_state.current_display_index += 1
+            time.sleep(0.3)
+            st.rerun()
+
+def run_courtroom_analysis():
+    """Chạy phân tích phiên tòa AI"""
+    config = st.session_state.config
+    
+    # Tạo transcript
+    transcript_lines = []
+    max_len = max(len(st.session_state.dialog_a), 
+                 len(st.session_state.dialog_b),
+                 len(st.session_state.dialog_c))
+    
+    for i in range(max_len):
+        if i < len(st.session_state.dialog_a):
+            transcript_lines.append(f"A{i+1} ({config.persona_a}): {st.session_state.dialog_a[i]}")
+        if i < len(st.session_state.dialog_b):
+            transcript_lines.append(f"B{i+1} ({config.persona_b}): {st.session_state.dialog_b[i]}")
+        if i < len(st.session_state.dialog_c):
+            transcript_lines.append(f"C{i+1} ({config.persona_c}): {st.session_state.dialog_c[i]}")
+    
+    transcript = "\n".join(transcript_lines)
+    
+    prompt = f"""
+    Bạn là Thẩm phán AI tối cao. Hãy phân tích cuộc tranh luận sau:
+    
+    **CHỦ ĐỀ:** {st.session_state.topic_used}
+    **PHONG CÁCH:** {st.session_state.final_style}
+    
+    **TRANSCRIPT:**
+    {transcript[:2500]}
+    
+    Hãy phân tích theo cấu trúc sau:
+    
+    ### 1. PHÂN TÍCH LẬP LUẬN
+    - Điểm mạnh của mỗi bên
+    - Lỗi logic/ngụy biện được sử dụng
+    - Tính chặt chẽ của lập luận
+    
+    ### 2. PHÁN QUYẾT
+    - Ai có lập luận thuyết phục hơn?
+    - Tại sao?
+    
+    ### 3. KHUYẾN NGHỊ
+    - Điểm cần cải thiện cho mỗi bên
+    - Cách tranh luận hiệu quả hơn
+    
+    Phân tích chi tiết, khách quan.
+    """
+    
+    with st.spinner("⏳ Đang phân tích chi tiết..."):
+        analysis = call_chat(
+            [{"role": "user", "content": prompt}],
+            max_tokens=2000
+        )
+        st.session_state.courtroom_analysis = analysis
 
 # --- Main Pages ---
 def render_home():
@@ -476,9 +614,9 @@ def render_home():
         # API selection
         api_options = []
         if GITHUB_TOKEN:
-            api_options.append("GitHub Models (github)")
+            api_options.append("GitHub Models")
         if OPENAI_API_KEY:
-            api_options.append("OpenAI Official (openai)")
+            api_options.append("OpenAI Official")
         
         if api_options:
             selected_api = st.selectbox(
@@ -540,7 +678,7 @@ def render_home():
         st.session_state.config.topic = st.text_input(
             "Nhập chủ đề tranh luận:",
             value=st.session_state.config.topic,
-            placeholder="Ví dụ: AI có nên được cấp quyền công dân không?"
+            placeholder="Ví dụ: Giai cấp thống trị và bị trị"
         )
     
     with col2:
@@ -618,11 +756,13 @@ def render_home():
             st.session_state.dialog_b = []
             st.session_state.dialog_c = []
             st.session_state.rpg_state = RPGState()
-            st.session_state.turn_state = TurnState()
+            st.session_state.debate_state = DebateState()
             st.session_state.debate_running = True
             st.session_state.debate_started = False
+            st.session_state.debate_finished = False
             st.session_state.topic_used = st.session_state.config.topic
             st.session_state.final_style = st.session_state.config.custom_style if st.session_state.config.custom_style else st.session_state.config.style
+            st.session_state.courtroom_analysis = None
             st.session_state.page = "debate"
             st.rerun()
 
@@ -631,9 +771,8 @@ def render_debate():
     st.title("🔥 Cuộc tranh luận")
     
     config = st.session_state.config
-    turn_state = st.session_state.turn_state
     
-    # Sidebar info
+    # Sidebar info - chỉ hiển thị thông tin cơ bản
     with st.sidebar:
         st.header("📊 Thông tin")
         st.info(f"**Chế độ:** {config.mode}")
@@ -641,201 +780,102 @@ def render_debate():
         st.info(f"**Phong cách:** {st.session_state.final_style}")
         
         if config.mode == "Chế độ RPG (Game Tranh luận)":
-            render_hp_bars()
-            
-            if st.session_state.rpg_state.log:
-                st.subheader("📜 Nhật ký chiến đấu")
-                for log in st.session_state.rpg_state.log[-5:]:
-                    st.write(log)
+            rpg = st.session_state.rpg_state
+            st.info(f"**{config.persona_a}:** {rpg.hp_a} HP")
+            st.info(f"**{config.persona_b}:** {rpg.hp_b} HP")
         
         if st.button("🔙 Về trang chủ", use_container_width=True):
             st.session_state.page = "home"
             st.rerun()
     
-    # Hiển thị chủ đề
+    # Hiển thị chủ đề và thông tin cơ bản
     st.header(f"Chủ đề: {st.session_state.topic_used}")
+    
+    # Hiển thị thông tin dạng danh sách
+    st.markdown("**Thông tin cuộc tranh luận:**")
+    st.markdown(f"- **Chế độ:** {config.mode}")
+    st.markdown(f"- **Phong cách:** {st.session_state.final_style}")
+    st.markdown(f"- **Bên A ({config.persona_a}):** Ủng hộ")
+    st.markdown(f"- **Bên B ({config.persona_b}):** Phản đối")
+    
+    if config.mode == "Tham gia 3 bên (Thành viên C)":
+        st.markdown(f"- **Bên C ({config.persona_c}):** Thành viên thứ ba")
+    
+    # Hiển thị thanh HP và nhật ký (nếu là chế độ RPG)
+    if config.mode == "Chế độ RPG (Game Tranh luận)":
+        render_hp_display()
+    
     st.markdown("---")
     
-    # Khởi tạo debate nếu chưa bắt đầu
-    if not st.session_state.debate_started and st.session_state.debate_running:
-        with st.spinner("Đang khởi tạo cuộc tranh luận..."):
-            a_open, b_open, c_open = generate_opening_statements()
-            st.session_state.dialog_a.append(a_open)
-            st.session_state.dialog_b.append(b_open)
-            
-            if config.mode == "Tham gia 3 bên (Thành viên C)":
-                st.session_state.dialog_c.append(c_open)
-            
-            st.session_state.debate_started = True
-            
-            # Đặt lượt đầu tiên
-            if config.mode == "Tranh luận 1v1 với AI":
-                turn_state.current_turn = "USER_B"
-            elif config.mode == "Tham gia 3 bên (Thành viên C)":
-                turn_state.current_turn = "USER_C"
-            else:
-                turn_state.current_turn = "B"
-            
-            # Tạo tiếp các lượt nếu cần (cho chế độ 2 AI)
-            if config.mode in ["Tranh luận 2 AI (Tiêu chuẩn)", "Chế độ RPG (Game Tranh luận)"]:
-                for i in range(config.rounds - 1):
-                    execute_ai_turn("A")
-                    execute_ai_turn("B")
-            
-            st.rerun()
+    # Hiển thị các nút điều khiển
+    render_control_buttons()
     
-    # Hiển thị chat history
-    max_messages = max(len(st.session_state.dialog_a), 
-                       len(st.session_state.dialog_b),
-                       len(st.session_state.dialog_c))
+    # Hiển thị tin nhắn chat
+    render_chat_messages()
     
-    for i in range(max_messages):
-        if i < len(st.session_state.dialog_a):
-            render_chat_message("A", st.session_state.dialog_a[i], i)
-        
-        if i < len(st.session_state.dialog_b):
-            render_chat_message("B", st.session_state.dialog_b[i], i)
-        
-        if i < len(st.session_state.dialog_c):
-            render_chat_message("C", st.session_state.dialog_c[i], i)
-    
-    # Kiểm tra game over
-    game_over, game_over_msg = check_game_over()
-    if game_over:
-        st.error(game_over_msg)
+    # Kiểm tra và hiển thị kết quả
+    is_victory, victory_msg = check_victory()
+    if is_victory:
+        st.session_state.debate_finished = True
         st.session_state.debate_running = False
+        
+        st.markdown("---")
+        st.success(victory_msg)
+        
+        # Hiển thị ưu thế nếu chưa có bên nào hết HP
+        if config.mode == "Chế độ RPG (Game Tranh luận)" and "CHIẾN THẮNG" not in victory_msg:
+            advantage = get_advantage_status()
+            if advantage:
+                st.info(advantage)
     
-    # Hiển thị lượt hiện tại và input cho người dùng
-    if st.session_state.debate_running and not game_over:
+    # Phần kết thúc và tùy chọn
+    if st.session_state.debate_finished:
         st.markdown("---")
         
-        # Xác định lượt hiện tại
-        current_turn = turn_state.current_turn
-        
-        if current_turn == "USER_B":
-            st.subheader(f"💬 Lượt của bạn (Bên B - {config.persona_b})")
+        # Nút phân tích AI
+        if config.mode != "Tham gia 3 bên (Thành viên C)":
+            col1, col2, col3 = st.columns(3)
             
-            # Tìm tin nhắn cuối cùng của A để hiển thị
-            if st.session_state.dialog_a:
-                last_a_msg = st.session_state.dialog_a[-1]
-                st.info(f"**{config.persona_a} vừa nói:** {last_a_msg[:200]}...")
-            
-            user_input = st.text_area(
-                "Phản biện của bạn:",
-                value=st.session_state.user_input,
-                key="user_input_b",
-                placeholder=f"Nhập phản biện với tư cách {config.persona_b}..."
-            )
-            
-            if st.button("🚀 Gửi phản biện", key="send_b"):
-                if user_input.strip():
-                    st.session_state.user_input = user_input
-                    execute_user_turn("USER_B", user_input.strip())
-                    st.session_state.user_input = ""
+            with col1:
+                if st.button("⚖️ Phân tích AI", use_container_width=True):
+                    run_courtroom_analysis()
                     st.rerun()
-                else:
-                    st.warning("Vui lòng nhập nội dung phản biện!")
-        
-        elif current_turn == "USER_C":
-            st.subheader(f"💬 Lượt của bạn (Bên C - {config.persona_c})")
             
-            # Tìm tin nhắn cuối cùng
-            if st.session_state.dialog_a and st.session_state.dialog_b:
-                last_a_msg = st.session_state.dialog_a[-1]
-                last_b_msg = st.session_state.dialog_b[-1]
-                st.info(f"**{config.persona_a}:** {last_a_msg[:100]}...")
-                st.info(f"**{config.persona_b}:** {last_b_msg[:100]}...")
+            with col2:
+                # Tạo transcript để tải
+                transcript_lines = []
+                max_len = max(len(st.session_state.dialog_a), 
+                             len(st.session_state.dialog_b),
+                             len(st.session_state.dialog_c))
+                
+                for i in range(max_len):
+                    if i < len(st.session_state.dialog_a):
+                        transcript_lines.append(f"A{i+1} ({config.persona_a}): {st.session_state.dialog_a[i]}")
+                    if i < len(st.session_state.dialog_b):
+                        transcript_lines.append(f"B{i+1} ({config.persona_b}): {st.session_state.dialog_b[i]}")
+                    if i < len(st.session_state.dialog_c):
+                        transcript_lines.append(f"C{i+1} ({config.persona_c}): {st.session_state.dialog_c[i]}")
+                
+                transcript = "\n".join(transcript_lines)
+                
+                st.download_button(
+                    "📥 Tải Transcript",
+                    data=transcript,
+                    file_name=f"debate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
             
-            user_input = st.text_area(
-                "Quan điểm của bạn:",
-                value=st.session_state.user_input,
-                key="user_input_c",
-                placeholder=f"Nhập quan điểm với tư cách {config.persona_c}..."
-            )
-            
-            if st.button("🚀 Gửi quan điểm", key="send_c"):
-                if user_input.strip():
-                    st.session_state.user_input = user_input
-                    execute_user_turn("USER_C", user_input.strip())
-                    st.session_state.user_input = ""
+            with col3:
+                if st.button("🔄 Tranh luận mới", type="primary", use_container_width=True):
+                    st.session_state.page = "home"
                     st.rerun()
-                else:
-                    st.warning("Vui lòng nhập nội dung!")
         
-        elif current_turn in ["A", "B"]:
-            # Lượt của AI - hiển thị nút để tiếp tục
-            st.subheader(f"⏳ Đang chờ lượt của {config.persona_a if current_turn == 'A' else config.persona_b}...")
-            
-            if st.button("▶️ Tiếp tục tranh luận", key="continue_ai"):
-                with st.spinner(f"{config.persona_a if current_turn == 'A' else config.persona_b} đang suy nghĩ..."):
-                    execute_ai_turn(current_turn)
-                    st.rerun()
-    
-    # Nếu debate đã kết thúc
-    if not st.session_state.debate_running or game_over:
-        st.markdown("---")
-        st.subheader("🎯 Tranh luận đã kết thúc")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if st.button("🔄 Tranh luận mới", type="primary"):
-                st.session_state.page = "home"
-                st.rerun()
-        
-        with col2:
-            # Tạo transcript
-            transcript_lines = []
-            max_len = max(len(st.session_state.dialog_a), 
-                         len(st.session_state.dialog_b),
-                         len(st.session_state.dialog_c))
-            
-            for i in range(max_len):
-                if i < len(st.session_state.dialog_a):
-                    transcript_lines.append(f"A{i+1} ({config.persona_a}): {st.session_state.dialog_a[i]}")
-                if i < len(st.session_state.dialog_b):
-                    transcript_lines.append(f"B{i+1} ({config.persona_b}): {st.session_state.dialog_b[i]}")
-                if i < len(st.session_state.dialog_c):
-                    transcript_lines.append(f"C{i+1} ({config.persona_c}): {st.session_state.dialog_c[i]}")
-            
-            transcript = "\n".join(transcript_lines)
-            
-            st.download_button(
-                "📥 Tải Transcript",
-                data=transcript,
-                file_name=f"debate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                mime="text/plain"
-            )
-        
-        with col3:
-            if config.mode != "Tham gia 3 bên (Thành viên C)":
-                if st.button("⚖️ Phân tích AI"):
-                    with st.spinner("Đang phân tích..."):
-                        analysis_prompt = f"""
-                        Phân tích cuộc tranh luận sau:
-                        
-                        Chủ đề: {st.session_state.topic_used}
-                        
-                        Transcript:
-                        {transcript[:3000]}
-                        
-                        Hãy phân tích:
-                        1. Điểm mạnh của mỗi bên
-                        2. Lỗi logic/ngụy biện nếu có
-                        3. Kết luận ai thuyết phục hơn
-                        """
-                        
-                        analysis = call_chat(
-                            [{"role": "user", "content": analysis_prompt}],
-                            max_tokens=1000
-                        )
-                        
-                        st.session_state.courtroom_analysis = analysis
-            
-            if st.session_state.courtroom_analysis:
-                st.markdown("---")
-                st.subheader("📋 Phân tích của AI")
-                st.markdown(st.session_state.courtroom_analysis)
+        # Hiển thị phân tích AI (full width)
+        if st.session_state.courtroom_analysis:
+            st.markdown("---")
+            st.header("⚖️ Phân tích Phiên Tòa AI")
+            st.markdown(st.session_state.courtroom_analysis)
 
 # --- CSS Style ---
 CHAT_STYLE = """
@@ -851,10 +891,11 @@ h1, h2, h3, h4, h5, h6 {
 .chat-bubble {
     padding: 10px 15px;
     border-radius: 18px;
-    margin: 5px 0;
+    margin: 10px 0;
     max-width: 70%;
     word-wrap: break-word;
     font-size: 16px;
+    line-height: 1.5;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
 }
 
@@ -863,6 +904,7 @@ h1, h2, h3, h4, h5, h6 {
     color: #4cd964 !important;
     margin-right: auto;
     border-top-left-radius: 2px;
+    border: 1px solid #2a4a3d;
 }
 .chat-left b {
     color: #58a6ff !important;
@@ -873,6 +915,7 @@ h1, h2, h3, h4, h5, h6 {
     color: #ff9500 !important;
     margin-left: auto;
     border-top-right-radius: 2px;
+    border: 1px solid #4d2c30;
 }
 .chat-right b {
     color: #58a6ff !important;
@@ -881,8 +924,9 @@ h1, h2, h3, h4, h5, h6 {
 .chat-user {
     background-color: #192f44;
     color: #8bb8e8 !important;
-    margin-left: auto;
-    border-top-right-radius: 2px;
+    margin: 10px auto;
+    border-radius: 18px;
+    border: 1px solid #2a3f5f;
 }
 .chat-user b {
     color: #c9d1d9 !important;
@@ -894,51 +938,49 @@ h1, h2, h3, h4, h5, h6 {
     margin-bottom: 10px;
 }
 
-.hp-bar-container {
-    background-color: #1e2d42;
-    border-radius: .35rem;
-    height: 1.8rem;
-    overflow: hidden;
-    margin-bottom: 15px;
-    border: 2px solid #58a6ff;
-    box-shadow: 0 0 5px rgba(88, 166, 255, 0.5);
-}
-.hp-bar-fill {
-    height: 100%;
-    transition: width 0.5s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: bold;
-    font-size: 14px;
-}
-
-.advantage-box {
-    padding: 10px;
+/* Button styles */
+.stButton > button {
     border-radius: 8px;
-    text-align: center;
     font-weight: bold;
-    margin-top: 15px;
-    margin-bottom: 20px;
+    transition: all 0.3s;
 }
 
-.advantage-A {
+.stButton > button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Info box styles */
+.stInfo {
+    background-color: #1e2d42;
+    border-left: 4px solid #58a6ff;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 10px 0;
+}
+
+.stSuccess {
     background-color: #0e4429;
-    color: #4cd964;
-    border: 1px solid #1f362d;
+    border-left: 4px solid #4cd964;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 10px 0;
 }
 
-.advantage-B {
-    background-color: #58161b;
-    color: #ff9500;
-    border: 1px solid #3b2225;
-}
-
-.advantage-draw {
+.stWarning {
     background-color: #423200;
-    color: #ffd60a;
-    border: 1px solid #332700;
+    border-left: 4px solid #ffd60a;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 10px 0;
+}
+
+.stError {
+    background-color: #58161b;
+    border-left: 4px solid #ff3b30;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 10px 0;
 }
 </style>
 """
