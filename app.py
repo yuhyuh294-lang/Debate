@@ -478,7 +478,7 @@ def render_hp_display():
         
         with col1:
             st.markdown(f"### {config.persona_a}")
-            hp_percent_a = max(0, rpg.hp_a)
+            hp_percent_a = max(0, min(100, rpg.hp_a))
             hp_color_a = "#4cd964" if hp_percent_a > 70 else ("#ff9500" if hp_percent_a > 30 else "#ff3b30")
             
             st.markdown(f"""
@@ -492,7 +492,7 @@ def render_hp_display():
         
         with col2:
             st.markdown(f"### {config.persona_b}")
-            hp_percent_b = max(0, rpg.hp_b)
+            hp_percent_b = max(0, min(100, rpg.hp_b))
             hp_color_b = "#4cd964" if hp_percent_b > 70 else ("#ff9500" if hp_percent_b > 30 else "#ff3b30")
             
             st.markdown(f"""
@@ -710,66 +710,73 @@ def render_chat_messages():
     debate_state = st.session_state.get('debate_state', DebateState())
     
     # Xác định số tin nhắn cần hiển thị
-    if debate_state.is_fast_mode:
-        display_count = max(len(st.session_state.dialog_a), 
-                           len(st.session_state.dialog_b),
-                           len(st.session_state.dialog_c))
-    else:
-        display_count = debate_state.current_display_index + 1
-        display_count = min(display_count, 
-                          max(len(st.session_state.dialog_a), 
-                              len(st.session_state.dialog_b),
-                              len(st.session_state.dialog_c)))
+    max_messages = max(len(st.session_state.dialog_a), 
+                      len(st.session_state.dialog_b),
+                      len(st.session_state.dialog_c))
     
-    # Hiển thị từng tin nhắn
+    if debate_state.is_fast_mode:
+        display_count = max_messages
+    else:
+        display_count = min(debate_state.current_display_index + 1, max_messages)
+    
+    # Hiển thị từng tin nhắn theo thứ tự
     for i in range(display_count):
+        # Hiển thị A
         if i < len(st.session_state.dialog_a):
-            st.markdown(f"""
-            <div class="chat-container">
-                <div class="chat-bubble chat-left">
-                    <div class="speaker-header">
-                        <span class="speaker-name">A{i+1} ({config.persona_a})</span>
-                    </div>
-                    <div class="message-content">
-                        {st.session_state.dialog_a[i]}
+            msg_a = st.session_state.dialog_a[i]
+            if msg_a:  # Chỉ hiển thị nếu có nội dung
+                st.markdown(f"""
+                <div style="display: flex; width: 100%; margin: 5px 0; padding: 0;">
+                    <div style="padding: 15px 20px; border-radius: 18px; margin: 8px 0; max-width: 75%; word-wrap: break-word; font-size: 15px; line-height: 1.6; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: transform 0.2s ease; position: relative; background: linear-gradient(135deg, #1f362d 0%, #2a4a3d 100%); color: #e0f7e9 !important; margin-right: auto; border-top-left-radius: 4px; border: 1px solid #2a4a3d;">
+                        <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                            <span style="font-weight: bold; font-size: 14px; letter-spacing: 0.5px; display: block; color: #4cd964 !important;">A{i+1} ({config.persona_a})</span>
+                        </div>
+                        <div style="font-size: 15px; line-height: 1.7; margin-top: 5px;">
+                            {msg_a}
+                        </div>
                     </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
         
+        # Hiển thị B
         if i < len(st.session_state.dialog_b):
-            st.markdown(f"""
-            <div class="chat-container" style="justify-content: flex-end;">
-                <div class="chat-bubble chat-right">
-                    <div class="speaker-header">
-                        <span class="speaker-name">B{i+1} ({config.persona_b})</span>
-                    </div>
-                    <div class="message-content">
-                        {st.session_state.dialog_b[i]}
+            msg_b = st.session_state.dialog_b[i]
+            if msg_b:  # Chỉ hiển thị nếu có nội dung
+                st.markdown(f"""
+                <div style="display: flex; width: 100%; margin: 5px 0; padding: 0; justify-content: flex-end;">
+                    <div style="padding: 15px 20px; border-radius: 18px; margin: 8px 0; max-width: 75%; word-wrap: break-word; font-size: 15px; line-height: 1.6; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: transform 0.2s ease; position: relative; background: linear-gradient(135deg, #3b2225 0%, #4d2c30 100%); color: #ffe5d9 !important; margin-left: auto; border-top-right-radius: 4px; border: 1px solid #4d2c30;">
+                        <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                            <span style="font-weight: bold; font-size: 14px; letter-spacing: 0.5px; display: block; color: #ff9500 !important;">B{i+1} ({config.persona_b})</span>
+                        </div>
+                        <div style="font-size: 15px; line-height: 1.7; margin-top: 5px;">
+                            {msg_b}
+                        </div>
                     </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
         
+        # Hiển thị C (nếu có)
         if i < len(st.session_state.dialog_c) and config.mode == "Tham gia 3 bên (Thành viên C)":
-            st.markdown(f"""
-            <div class="chat-container" style="justify-content: center;">
-                <div class="chat-bubble chat-user">
-                    <div class="speaker-header">
-                        <span class="speaker-name">C{i+1} ({config.persona_c})</span>
-                    </div>
-                    <div class="message-content">
-                        {st.session_state.dialog_c[i]}
+            msg_c = st.session_state.dialog_c[i]
+            if msg_c:  # Chỉ hiển thị nếu có nội dung
+                st.markdown(f"""
+                <div style="display: flex; width: 100%; margin: 5px 0; padding: 0; justify-content: center;">
+                    <div style="padding: 15px 20px; border-radius: 18px; margin: 8px 0; max-width: 85%; word-wrap: break-word; font-size: 15px; line-height: 1.6; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: transform 0.2s ease; position: relative; background: linear-gradient(135deg, #192f44 0%, #2a3f5f 100%); color: #d6e4ff !important; margin: 15px auto; border-radius: 18px; border: 1px solid #2a3f5f;">
+                        <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                            <span style="font-weight: bold; font-size: 14px; letter-spacing: 0.5px; display: block; color: #8bb8e8 !important;">C{i+1} ({config.persona_c})</span>
+                        </div>
+                        <div style="font-size: 15px; line-height: 1.7; margin-top: 5px;">
+                            {msg_c}
+                        </div>
                     </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Tự động tăng display index nếu chưa ở fast mode
-        if not debate_state.is_fast_mode and i == debate_state.current_display_index:
-            debate_state.current_display_index += 1
-            time.sleep(0.3)
-            st.rerun()
+                """, unsafe_allow_html=True)
+    
+    # Tự động tăng display index nếu chưa ở fast mode
+    if not debate_state.is_fast_mode and debate_state.current_display_index < max_messages:
+        debate_state.current_display_index += 1
+        time.sleep(0.3)
+        st.rerun()
 
 def run_courtroom_analysis():
     """Chạy phân tích phiên tòa AI"""
@@ -1017,7 +1024,7 @@ def render_debate():
         
         st.markdown("</div>", unsafe_allow_html=True)
         
-        if st.button("🔙 Về trang chủ", use_container_width=True):
+        if st.button("🔙 Về trang chủ", use_container_width=True, key="back_home"):
             st.session_state.page = "home"
             st.rerun()
     
@@ -1026,8 +1033,6 @@ def render_debate():
     
     # Container thông tin cuộc tranh luận
     with st.container():
-        st.markdown("### Thông tin cuộc tranh luận")
-        
         info_col1, info_col2 = st.columns(2)
         
         with info_col1:
@@ -1035,11 +1040,11 @@ def render_debate():
             st.markdown(f"**Phong cách:** {st.session_state.final_style}")
         
         with info_col2:
-            st.markdown(f"**Bên A ({config.persona_a}):** Ủng hộ")
-            st.markdown(f"**Bên B ({config.persona_b}):** Phản đối")
+            st.markdown(f"**Bên A:** {config.persona_a}")
+            st.markdown(f"**Bên B:** {config.persona_b}")
             
             if config.mode == "Tham gia 3 bên (Thành viên C)":
-                st.markdown(f"**Bên C ({config.persona_c}):** Thành viên thứ ba")
+                st.markdown(f"**Bên C:** {config.persona_c}")
     
     # Hiển thị thanh HP và nhật ký (nếu là chế độ RPG)
     if config.mode == "Chế độ RPG (Game Tranh luận)":
@@ -1085,7 +1090,7 @@ def render_debate():
             col1, col2, col3 = st.columns(3)
             
             with col1:
-                if st.button("⚖️ Phân tích AI", use_container_width=True, type="secondary"):
+                if st.button("⚖️ Phân tích AI", use_container_width=True, type="secondary", key="ai_analysis"):
                     run_courtroom_analysis()
                     st.rerun()
             
@@ -1111,11 +1116,12 @@ def render_debate():
                     data=transcript,
                     file_name=f"debate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
                     mime="text/plain",
-                    use_container_width=True
+                    use_container_width=True,
+                    key="download_transcript"
                 )
             
             with col3:
-                if st.button("🔄 Tranh luận mới", type="primary", use_container_width=True):
+                if st.button("🔄 Tranh luận mới", type="primary", use_container_width=True, key="new_debate"):
                     st.session_state.page = "home"
                     st.rerun()
         
@@ -1141,21 +1147,26 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
 }
 
-/* Chat bubbles */
+/* Chat bubbles - Sửa phần trắng ở đầu */
 .chat-bubble {
     padding: 15px 20px;
     border-radius: 18px;
-    margin: 15px 0;
+    margin: 8px 0;
     max-width: 75%;
     word-wrap: break-word;
     font-size: 15px;
     line-height: 1.6;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     transition: transform 0.2s ease;
+    position: relative;
 }
 
-.chat-bubble:hover {
-    transform: translateY(-2px);
+/* Loại bỏ khoảng trắng thừa */
+.chat-container {
+    display: flex;
+    width: 100%;
+    margin: 5px 0;
+    padding: 0;
 }
 
 .speaker-header {
@@ -1168,11 +1179,13 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: bold;
     font-size: 14px;
     letter-spacing: 0.5px;
+    display: block;
 }
 
 .message-content {
     font-size: 15px;
     line-height: 1.7;
+    margin-top: 5px;
 }
 
 .chat-left {
@@ -1197,41 +1210,67 @@ h1, h2, h3, h4, h5, h6 {
     color: #ff9500 !important;
 }
 
-.chat-user {
-    background: linear-gradient(135deg, #192f44 0%, #2a3f5f 100%);
-    color: #d6e4ff !important;
-    margin: 15px auto;
-    border-radius: 18px;
-    border: 1px solid #2a3f5f;
-    max-width: 85%;
-}
-.chat-user .speaker-name {
-    color: #8bb8e8 !important;
-}
-
-.chat-container {
-    display: flex;
-    width: 100%;
-    margin-bottom: 5px;
-}
-
-/* Button styles */
-.stButton > button {
+/* Sidebar info card - Sửa ô xanh không nội dung */
+.sidebar-card {
+    background-color: #1e2d42;
+    padding: 15px;
     border-radius: 10px;
-    font-weight: 600;
-    transition: all 0.3s;
-    border: none;
-    padding: 10px 20px;
+    margin-bottom: 15px;
+    border-left: 4px solid #58a6ff;
 }
 
-.stButton > button:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+/* HP bars */
+.hp-bar {
+    background-color: #1e2d42;
+    border-radius: 10px;
+    height: 30px;
+    overflow: hidden;
+    margin: 10px 0;
+    border: 2px solid;
 }
 
-/* Container styles */
-[data-testid="stHorizontalBlock"] {
-    gap: 10px;
+.hp-fill {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+/* Control buttons */
+.control-button {
+    width: 100%;
+    margin: 5px 0;
+}
+
+/* Battle log - Sửa đường kẻ phân cách */
+.battle-log {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #30363d;
+}
+
+/* Sửa khoảng cách giữa các phần tử */
+div[data-testid="stHorizontalBlock"] {
+    gap: 8px;
+    margin: 5px 0;
+}
+
+/* Sửa padding của các container */
+.main .block-container {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+}
+
+/* Info box trong sidebar */
+[data-testid="stSidebar"] .sidebar-card {
+    background-color: #1e2d42;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 15px;
+    margin: 10px 0;
 }
 
 /* Text area */
@@ -1249,29 +1288,18 @@ h1, h2, h3, h4, h5, h6 {
     box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
 }
 
-/* Info boxes */
-.stAlert {
+/* Button styles */
+.stButton > button {
     border-radius: 10px;
-    border-left: 5px solid;
-    padding: 15px;
+    font-weight: 600;
+    transition: all 0.3s;
+    border: none;
+    padding: 10px 20px;
 }
 
-.stAlert [data-testid="stMarkdownContainer"] {
-    font-size: 14px;
-}
-
-/* Sidebar */
-[data-testid="stSidebar"] {
-    background-color: #161b22;
-}
-
-[data-testid="stSidebar"] .stAlert {
-    background-color: #1e2d42;
-}
-
-/* Progress bars */
-[role="progressbar"] {
-    background-color: #58a6ff;
+.stButton > button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 
 /* Custom scrollbar */
@@ -1294,66 +1322,6 @@ h1, h2, h3, h4, h5, h6 {
     background: #58a6ff;
 }
 
-/* Cards and containers */
-div[data-testid="stExpander"] {
-    border: 1px solid #30363d;
-    border-radius: 10px;
-    background-color: #161b22;
-}
-
-div[data-testid="stExpander"] div:first-child {
-    border-radius: 10px 10px 0 0;
-}
-
-/* Radio buttons and checkboxes */
-.stRadio > div {
-    flex-direction: row;
-    gap: 15px;
-}
-
-.stRadio label {
-    background-color: #161b22;
-    border: 1px solid #30363d;
-    border-radius: 8px;
-    padding: 8px 15px;
-    transition: all 0.2s;
-}
-
-.stRadio label:hover {
-    background-color: #1e2d42;
-    border-color: #58a6ff;
-}
-
-.stRadio input:checked + label {
-    background-color: #1e2d42;
-    border-color: #58a6ff;
-    color: #58a6ff;
-}
-
-/* Sliders */
-.stSlider {
-    margin: 15px 0;
-}
-
-.stSlider div[data-baseweb="slider"] {
-    padding: 0;
-}
-
-.stSlider div[role="slider"] {
-    background-color: #58a6ff;
-}
-
-/* Select boxes */
-.stSelectbox div[data-baseweb="select"] {
-    border-radius: 8px;
-    border: 1px solid #30363d;
-    background-color: #161b22;
-}
-
-.stSelectbox div[data-baseweb="select"]:hover {
-    border-color: #58a6ff;
-}
-
 /* Success, Warning, Error messages */
 .stSuccess {
     background: linear-gradient(135deg, #0e4429 0%, #1f362d 100%);
@@ -1373,40 +1341,6 @@ div[data-testid="stExpander"] div:first-child {
 .stInfo {
     background: linear-gradient(135deg, #1e2d42 0%, #192f44 100%);
     border-left: 5px solid #58a6ff;
-}
-
-/* Status indicators */
-.status-indicator {
-    display: inline-block;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    margin-right: 8px;
-}
-
-.status-active {
-    background-color: #4cd964;
-    box-shadow: 0 0 8px #4cd964;
-}
-
-.status-waiting {
-    background-color: #ff9500;
-    box-shadow: 0 0 8px #ff9500;
-}
-
-.status-inactive {
-    background-color: #ff3b30;
-    box-shadow: 0 0 8px #ff3b30;
-}
-
-/* Tooltips */
-[data-testid="stTooltip"] {
-    background-color: #161b22 !important;
-    border: 1px solid #30363d !important;
-    color: #c9d1d9 !important;
-    border-radius: 8px !important;
-    padding: 10px !important;
-    font-size: 13px !important;
 }
 </style>
 """
