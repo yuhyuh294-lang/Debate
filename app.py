@@ -9,6 +9,7 @@ import json
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
+import io
 
 # --- Cấu hình và Khởi tạo ---
 try:
@@ -169,6 +170,95 @@ def call_chat(messages: List[Dict], model: str = None, temperature: float = None
     except Exception as e:
         st.error(f"Lỗi API: {str(e)[:200]}")
         return f"[[LỖI: {str(e)[:100]}]]"
+
+# --- Hàm xử lý ảnh ---
+def encode_image_to_base64(image: Image.Image) -> str:
+    """Chuyển đổi ảnh PIL thành base64 string"""
+    buffered = io.BytesIO()
+    image.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+def analyze_image_for_topic(image: Image.Image) -> str:
+    """Phân tích ảnh để đề xuất chủ đề tranh luận"""
+    try:
+        # Encode ảnh thành base64
+        base64_image = encode_image_to_base64(image)
+        
+        # Tạo prompt cho AI phân tích ảnh
+        prompt = """
+        Hãy phân tích hình ảnh này và đề xuất 3 chủ đề tranh luận thú vị, gây tranh cãi dựa trên nội dung hình ảnh.
+        Mỗi chủ đề nên có tính tranh luận cao, có thể phân tích từ nhiều góc độ.
+        Trả về dưới dạng:
+        1. [Chủ đề 1]
+        2. [Chủ đề 2]
+        3. [Chủ đề 3]
+        
+        Chỉ trả về danh sách chủ đề, không thêm giải thích gì khác.
+        """
+        
+        # Kiểm tra xem model có hỗ trợ vision không
+        config = st.session_state.config
+        if "gpt-4" in config.model.lower() and "vision" not in config.model.lower():
+            # Nếu là GPT-4 thông thường, có thể hỗ trợ vision
+            model_to_use = "gpt-4-vision-preview" if config.api_client == "openai" else config.model
+        else:
+            model_to_use = config.model
+        
+        # Tạo messages với ảnh
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{base64_image}",
+                            "detail": "high"
+                        }
+                    }
+                ]
+            }
+        ]
+        
+        with st.spinner("🤖 AI đang phân tích hình ảnh..."):
+            client = get_api_client()
+            response = client.chat.completions.create(
+                model=model_to_use,
+                messages=messages,
+                max_tokens=500,
+                temperature=0.7
+            )
+            
+            topics_text = response.choices[0].message.content
+            
+            # Parse kết quả
+            topics = []
+            lines = topics_text.strip().split('\n')
+            for line in lines:
+                line = line.strip()
+                if line and (line[0].isdigit() and '.' in line[:3]):
+                    # Xóa số và dấu chấm
+                    topic = line.split('.', 1)[1].strip()
+                    topics.append(topic)
+            
+            return topics[:3]  # Chỉ lấy 3 chủ đề đầu tiên
+            
+    except Exception as e:
+        st.error(f"Lỗi phân tích ảnh: {str(e)[:200]}")
+        # Fallback: dùng text-only nếu vision không hoạt động
+        fallback_prompt = "Hãy đề xuất 3 chủ đề tranh luận thú vị, gây tranh cãi về xã hội, công nghệ, hoặc đạo đức."
+        fallback_response = call_chat([{"role": "user", "content": fallback_prompt}])
+        
+        # Parse kết quả fallback
+        topics = []
+        lines = fallback_response.strip().split('\n')
+        for line in lines:
+            line = line.strip()
+            if line and len(line) > 10:  # Chỉ lấy các dòng có nội dung
+                topics.append(line)
+        
+        return topics[:3]
 
 # --- Debate Logic Functions ---
 def generate_opening_statements() -> Tuple[str, str, str]:
@@ -857,7 +947,7 @@ def render_home():
         # Model selection
         model_options = ["openai/gpt-4.1", "openai/gpt-4o-mini", "openai/gpt-3.5-turbo"]
         if st.session_state.config.api_client == "openai":
-            model_options = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-4o"]
+            model_options = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-4o", "gpt-4-vision-preview"]
         
         st.session_state.config.model = st.selectbox(
             "Model:",
@@ -898,34 +988,85 @@ def render_home():
         index=modes.index(st.session_state.config.mode) if st.session_state.config.mode in modes else 0
     )
     
-    # 2. Chủ đề
+    # 2. Chủ đề tranh luận
     st.subheader("2) Chủ đề tranh luận")
     
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.session_state.config.topic = st.text_input(
-            "Nhập chủ đề tranh luận:",
-            value=st.session_state.config.topic,
-            placeholder="Ví dụ: Giai cấp thống trị và bị trị"
+    # Phần upload ảnh để phân tích
+    with st.expander("📸 Tải lên ảnh để AI phân tích và đề xuất chủ đề", expanded=False):
+        st.info("AI sẽ phân tích nội dung hình ảnh và đề xuất chủ đề tranh luận phù hợp.")
+        
+        uploaded_file = st.file_uploader(
+            "Chọn một hình ảnh...", 
+            type=["png", "jpg", "jpeg", "webp"],
+            key="image_uploader"
         )
+        
+        if uploaded_file is not None:
+            # Hiển thị ảnh xem trước
+            image = Image.open(uploaded_file)
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                st.image(image, caption="Ảnh đã tải lên", width=200)
+            
+            with col2:
+                st.write("**Thông tin ảnh:**")
+                st.write(f"- Định dạng: {uploaded_file.type}")
+                st.write(f"- Kích thước: {image.size[0]}x{image.size[1]} pixels")
+            
+            # Nút phân tích ảnh
+            if st.button("🔍 AI Phân tích ảnh", type="primary", use_container_width=True):
+                with st.spinner("AI đang phân tích hình ảnh..."):
+                    try:
+                        # Phân tích ảnh để lấy chủ đề
+                        suggested_topics = analyze_image_for_topic(image)
+                        
+                        if suggested_topics and len(suggested_topics) > 0:
+                            st.session_state.suggested_topics = suggested_topics
+                            st.success(f"✅ AI đã đề xuất {len(suggested_topics)} chủ đề từ hình ảnh!")
+                            
+                            # Hiển thị các chủ đề đề xuất
+                            st.markdown("**Chủ đề đề xuất từ hình ảnh:**")
+                            for idx, topic in enumerate(suggested_topics, 1):
+                                st.write(f"{idx}. {topic}")
+                        else:
+                            st.warning("Không thể phân tích được chủ đề từ hình ảnh.")
+                    except Exception as e:
+                        st.error(f"Lỗi khi phân tích ảnh: {str(e)}")
+        
+        st.markdown("---")
+        
+        # Hiển thị chủ đề đã nhập
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.session_state.config.topic = st.text_input(
+                "Nhập chủ đề tranh luận:",
+                value=st.session_state.config.topic,
+                placeholder="Ví dụ: Giai cấp thống trị và bị trị",
+                key="topic_input_main"
+            )
+        
+        with col2:
+            st.write("")
+            st.write("")
+            if st.button("💡 Gợi ý chủ đề", use_container_width=True, key="suggest_topics_btn"):
+                with st.spinner("Đang tạo..."):
+                    prompt = "Gợi ý 3 chủ đề tranh luận thú vị, gây tranh cãi"
+                    response = call_chat([{"role": "user", "content": prompt}])
+                    topics = [t.strip() for t in response.split('\n') if t.strip()]
+                    st.session_state.suggested_topics = topics[:3]
     
-    with col2:
-        st.write("")
-        st.write("")
-        if st.button("💡 Gợi ý chủ đề", use_container_width=True):
-            with st.spinner("Đang tạo..."):
-                prompt = "Gợi ý 3 chủ đề tranh luận thú vị, gây tranh cãi"
-                response = call_chat([{"role": "user", "content": prompt}])
-                topics = [t.strip() for t in response.split('\n') if t.strip()]
-                st.session_state.suggested_topics = topics[:3]
-    
+    # Hiển thị chủ đề đề xuất (nếu có)
     if st.session_state.suggested_topics:
         st.markdown("**Chọn từ gợi ý:**")
-        for topic in st.session_state.suggested_topics:
-            if st.button(topic[:80], key=f"topic_{topic[:10]}", use_container_width=True):
-                st.session_state.config.topic = topic
-                st.session_state.suggested_topics = None
-                st.rerun()
+        for idx, topic in enumerate(st.session_state.suggested_topics):
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                st.write(f"**{idx+1}. {topic}**")
+            with col2:
+                if st.button("Chọn", key=f"select_topic_{idx}", use_container_width=True):
+                    st.session_state.config.topic = topic
+                    st.session_state.suggested_topics = None
+                    st.rerun()
     
     # 3. Phong cách
     st.subheader("3) Phong cách tranh luận")
@@ -1002,36 +1143,35 @@ def render_debate():
     
     config = st.session_state.config
     
-    # Sidebar info - SỬA LẠI: không dùng HTML phức tạp
+    # Sidebar info - SỬA LẠI: tạo toàn bộ HTML trong một chuỗi
     with st.sidebar:
         st.header("📊 Thông tin")
         
-        # Tạo một container với background và border
-        st.markdown(
-            """
-            <div style="
-                background-color: #1e2d42; 
-                padding: 15px; 
-                border-radius: 10px; 
-                border-left: 4px solid #58a6ff;
-                margin-bottom: 15px;
-            ">
-            """, 
-            unsafe_allow_html=True
-        )
-        
-        # Hiển thị thông tin bằng markdown đơn giản
-        st.markdown(f"**Chế độ:** {config.mode}")
-        st.markdown(f"**Chủ đề:** {st.session_state.topic_used}")
-        st.markdown(f"**Phong cách:** {st.session_state.final_style}")
+        # Tạo toàn bộ HTML trong một chuỗi duy nhất
+        html_content = f"""
+        <div style="
+            background-color: #1e2d42; 
+            padding: 15px; 
+            border-radius: 10px; 
+            border-left: 4px solid #58a6ff;
+            margin-bottom: 15px;
+        ">
+            <p style="margin: 8px 0;"><strong>Chế độ:</strong> {config.mode}</p>
+            <p style="margin: 8px 0;"><strong>Chủ đề:</strong> {st.session_state.topic_used}</p>
+            <p style="margin: 8px 0;"><strong>Phong cách:</strong> {st.session_state.final_style}</p>
+        """
         
         if config.mode == "Chế độ RPG (Game Tranh luận)":
             rpg = st.session_state.rpg_state
-            st.markdown(f"**{config.persona_a}:** {rpg.hp_a} HP")
-            st.markdown(f"**{config.persona_b}:** {rpg.hp_b} HP")
+            html_content += f"""
+            <p style="margin: 8px 0;"><strong>{config.persona_a}:</strong> {rpg.hp_a} HP</p>
+            <p style="margin: 8px 0;"><strong>{config.persona_b}:</strong> {rpg.hp_b} HP</p>
+            """
         
-        # Đóng thẻ div
-        st.markdown("</div>", unsafe_allow_html=True)
+        html_content += "</div>"
+        
+        # Hiển thị toàn bộ HTML trong một lần duy nhất
+        st.markdown(html_content, unsafe_allow_html=True)
         
         st.markdown("---")
         
@@ -1275,6 +1415,27 @@ hr {
 /* Fix for sidebar spacing */
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
     gap: 10px !important;
+}
+
+/* Image upload styling */
+.uploadedImage {
+    border-radius: 10px;
+    border: 2px solid #30363d;
+    margin: 10px 0;
+}
+
+/* Expander styling */
+.streamlit-expanderHeader {
+    background-color: #1e2d42 !important;
+    border-radius: 8px !important;
+    border: 1px solid #30363d !important;
+}
+
+.streamlit-expanderContent {
+    background-color: #161b22 !important;
+    border-radius: 0 0 8px 8px !important;
+    border: 1px solid #30363d !important;
+    border-top: none !important;
 }
 </style>
 """
