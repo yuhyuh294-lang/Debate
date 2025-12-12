@@ -1209,7 +1209,7 @@ def render_debate():
    
     
     render_control_buttons()
-    st.markdown("---")
+    
     render_user_input()
     
     render_chat_messages()
@@ -1565,6 +1565,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
