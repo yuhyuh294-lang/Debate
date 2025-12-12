@@ -972,9 +972,10 @@ def render_home():
             with st.spinner("AI đang tạo chủ đề..."):
                 topics = generate_text_topics()
                 st.session_state.suggested_topics = topics
-                st.session_state.image_analysis_result = None  # Xóa kết quả phân tích ảnh
+                st.session_state.image_analysis_result = None
                 st.rerun()
         
+        # Hiển thị chủ đề đề xuất từ văn bản
         if st.session_state.suggested_topics and not st.session_state.image_analysis_result:
             st.markdown("**Chủ đề đề xuất:**")
             for idx, topic in enumerate(st.session_state.suggested_topics, 1):
@@ -982,9 +983,12 @@ def render_home():
                 with col1:
                     st.write(f"**{idx}. {topic}**")
                 with col2:
+                    # Dùng callback để xử lý khi nhấn nút
                     if st.button("Chọn", key=f"select_text_topic_{idx}", use_container_width=True):
                         st.session_state.config.topic = topic
                         st.session_state.suggested_topics = None
+                        st.success(f"✅ Đã chọn chủ đề: {topic}")
+                        time.sleep(0.5)  # Hiển thị thông báo ngắn
                         st.rerun()
     
     # Tab 3: Phân tích hình ảnh
@@ -1031,15 +1035,21 @@ def render_home():
                 with col1:
                     st.write(f"**{idx}. {topic}**")
                 with col2:
+                    # Dùng callback để xử lý khi nhấn nút
                     if st.button("Chọn", key=f"select_img_topic_{idx}", use_container_width=True):
                         st.session_state.config.topic = topic
                         st.session_state.suggested_topics = None
                         st.session_state.image_analysis_result = None
+                        st.success(f"✅ Đã chọn chủ đề từ ảnh: {topic}")
+                        time.sleep(0.5)  # Hiển thị thông báo ngắn
                         st.rerun()
     
-    # Hiển thị chủ đề đang chọn (dùng chung cho cả 3 tabs)
+    # Hiển thị chủ đề đang chọn (dùng chung cho cả 3 tabs) - DI CHUYỂN LÊN TRÊN
+    st.markdown("---")
     if st.session_state.config.topic:
-        st.markdown(f"**Chủ đề đã chọn:** `{st.session_state.config.topic}`")
+        st.markdown(f"### 📋 Chủ đề đã chọn: `{st.session_state.config.topic}`")
+    else:
+        st.warning("⚠️ Chưa có chủ đề tranh luận. Vui lòng nhập hoặc chọn chủ đề từ các tab trên.")
     
     # 3. Phong cách
     st.subheader("3) Phong cách tranh luận")
@@ -1390,6 +1400,17 @@ hr {
 .stTabs [aria-selected="true"] {
     background-color: #0d1117 !important;
     border-bottom: 3px solid #58a6ff !important;
+}
+
+/* Selected topic styling */
+.selected-topic {
+    background-color: #1f362d;
+    padding: 15px;
+    border-radius: 10px;
+    border-left: 5px solid #4cd964;
+    margin: 15px 0;
+    font-size: 18px;
+    font-weight: bold;
 }
 </style>
 """
