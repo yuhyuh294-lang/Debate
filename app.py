@@ -1343,7 +1343,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Sidebar styles - FIXED */
 [data-testid="stSidebar"] {
-    background-color: #323c4a !important;
+    background-color: #3a3e6e !important;
     color: #c9d1d9 !important;
 }
 
@@ -1565,6 +1565,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
