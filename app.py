@@ -753,69 +753,85 @@ def render_user_input():
                 st.rerun()
 
 def render_chat_messages():
-    """Hiển thị các tin nhắn trong chat"""
+    """Hiển thị các tin nhắn trong chat (FIX THỨ TỰ TUYỆT ĐỐI)"""
     config = st.session_state.config
-    debate_state = st.session_state.get('debate_state', DebateState())
-    
-    max_messages = max(len(st.session_state.dialog_a), 
-                      len(st.session_state.dialog_b),
-                      len(st.session_state.dialog_c))
-    
+    debate_state = st.session_state.get("debate_state", DebateState())
+
+    dialog_a = st.session_state.dialog_a
+    dialog_b = st.session_state.dialog_b
+    dialog_c = st.session_state.dialog_c
+
+    # Số vòng hợp lệ = số lượt A (A là người mở lượt)
+    max_rounds = len(dialog_a)
+
     if debate_state.is_fast_mode:
-        display_count = max_messages
+        display_rounds = max_rounds
     else:
-        display_count = min(debate_state.current_display_index + 1, max_messages)
-    
-    for i in range(display_count):
-        if i < len(st.session_state.dialog_a):
-            msg_a = st.session_state.dialog_a[i]
+        display_rounds = min(debate_state.current_display_index + 1, max_rounds)
+
+    for i in range(display_rounds):
+
+        # ===== A (luôn render trước) =====
+        if i < len(dialog_a):
+            msg_a = dialog_a[i]
             if msg_a:
                 st.markdown(f"""
-                <div style="display: flex; width: 100%; margin: 5px 0; padding: 0;">
-                    <div style="padding: 15px 20px; border-radius: 18px; margin: 8px 0; max-width: 75%; word-wrap: break-word; font-size: 15px; line-height: 1.6; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: transform 0.2s ease; position: relative; background: linear-gradient(135deg, #1f362d 0%, #2a4a3d 100%); color: #e0f7e9 !important; margin-right: auto; border-top-left-radius: 4px; border: 1px solid #2a4a3d;">
-                        <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
-                            <span style="font-weight: bold; font-size: 14px; letter-spacing: 0.5px; display: block; color: #4cd964 !important;">A{i+1} ({config.persona_a})</span>
-                        </div>
-                        <div style="font-size: 15px; line-height: 1.7; margin-top: 5px;">
-                            {msg_a}
-                        </div>
+                <div style="display:flex;width:100%;margin:5px 0;">
+                  <div style="padding:15px 20px;max-width:75%;
+                    background:linear-gradient(135deg,#1f362d,#2a4a3d);
+                    color:#e0f7e9;border-radius:18px 18px 18px 4px;
+                    box-shadow:0 4px 12px rgba(0,0,0,.2);">
+                    <div style="font-weight:bold;color:#4cd964;margin-bottom:6px;">
+                      A{i+1} ({config.persona_a})
                     </div>
+                    {msg_a}
+                  </div>
                 </div>
                 """, unsafe_allow_html=True)
-        
-        if i < len(st.session_state.dialog_b):
-            msg_b = st.session_state.dialog_b[i]
+
+        # ===== B (CHỈ render nếu A cùng lượt tồn tại) =====
+        if i < len(dialog_b) and i < len(dialog_a):
+            msg_b = dialog_b[i]
             if msg_b:
                 st.markdown(f"""
-                <div style="display: flex; width: 100%; margin: 5px 0; padding: 0; justify-content: flex-end;">
-                    <div style="padding: 15px 20px; border-radius: 18px; margin: 8px 0; max-width: 75%; word-wrap: break-word; font-size: 15px; line-height: 1.6; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: transform 0.2s ease; position: relative; background: linear-gradient(135deg, #3b2225 0%, #4d2c30 100%); color: #ffe5d9 !important; margin-left: auto; border-top-right-radius: 4px; border: 1px solid #4d2c30;">
-                        <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
-                            <span style="font-weight: bold; font-size: 14px; letter-spacing: 0.5px; display: block; color: #ff9500 !important;">B{i+1} ({config.persona_b})</span>
-                        </div>
-                        <div style="font-size: 15px; line-height: 1.7; margin-top: 5px;">
-                            {msg_b}
-                        </div>
+                <div style="display:flex;width:100%;margin:5px 0;justify-content:flex-end;">
+                  <div style="padding:15px 20px;max-width:75%;
+                    background:linear-gradient(135deg,#3b2225,#4d2c30);
+                    color:#ffe5d9;border-radius:18px 18px 4px 18px;
+                    box-shadow:0 4px 12px rgba(0,0,0,.2);">
+                    <div style="font-weight:bold;color:#ff9500;margin-bottom:6px;">
+                      B{i+1} ({config.persona_b})
                     </div>
+                    {msg_b}
+                  </div>
                 </div>
                 """, unsafe_allow_html=True)
-        
-        if i < len(st.session_state.dialog_c) and config.mode == "Tham gia 3 bên (Thành viên C)":
-            msg_c = st.session_state.dialog_c[i]
+
+        # ===== C (CHỈ render nếu A & B đã có) =====
+        if (
+            config.mode == "Tham gia 3 bên (Thành viên C)"
+            and i < len(dialog_c)
+            and i < len(dialog_a)
+            and i < len(dialog_b)
+        ):
+            msg_c = dialog_c[i]
             if msg_c:
                 st.markdown(f"""
-                <div style="display: flex; width: 100%; margin: 5px 0; padding: 0; justify-content: center;">
-                    <div style="padding: 15px 20px; border-radius: 18px; margin: 8px 0; max-width: 85%; word-wrap: break-word; font-size: 15px; line-height: 1.6; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: transform 0.2s ease; position: relative; background: linear-gradient(135deg, #192f44 0%, #2a3f5f 100%); color: #d6e4ff !important; margin: 15px auto; border-radius: 18px; border: 1px solid #2a3f5f;">
-                        <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
-                            <span style="font-weight: bold; font-size: 14px; letter-spacing: 0.5px; display: block; color: #8bb8e8 !important;">C{i+1} ({config.persona_c})</span>
-                        </div>
-                        <div style="font-size: 15px; line-height: 1.7; margin-top: 5px;">
-                            {msg_c}
-                        </div>
+                <div style="display:flex;width:100%;margin:8px 0;justify-content:center;">
+                  <div style="padding:15px 20px;max-width:85%;
+                    background:linear-gradient(135deg,#192f44,#2a3f5f);
+                    color:#d6e4ff;border-radius:18px;
+                    box-shadow:0 4px 12px rgba(0,0,0,.2);">
+                    <div style="font-weight:bold;color:#8bb8e8;margin-bottom:6px;">
+                      C{i+1} ({config.persona_c})
                     </div>
+                    {msg_c}
+                  </div>
                 </div>
                 """, unsafe_allow_html=True)
-    
-    if not debate_state.is_fast_mode and debate_state.current_display_index < max_messages:
+
+    # ===== Animation step (GIỮ NGUYÊN, AN TOÀN) =====
+    if not debate_state.is_fast_mode and debate_state.current_display_index < max_rounds - 1:
         debate_state.current_display_index += 1
         time.sleep(0.3)
         st.rerun()
@@ -1565,6 +1581,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
