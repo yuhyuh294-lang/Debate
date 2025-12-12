@@ -1297,7 +1297,7 @@ CHAT_STYLE = """
 
 /* Main content headings */
 h1, h2, h3, h4, h5, h6 {
-    color: #58a6ff;
+    color: #c9d1d9;
     font-weight: 600;
 }
 
@@ -1565,6 +1565,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
