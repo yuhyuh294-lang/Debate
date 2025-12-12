@@ -1489,7 +1489,7 @@ hr {
 
 .stTabs [aria-selected="true"] {
     background-color: #0d1117 !important;
-    border-bottom: 3px solid #58a6ff !important;
+    border-bottom: 3px solid #c9d1d9 !important;
 }
 
 /* Chủ đề đã chọn */
@@ -1565,6 +1565,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
