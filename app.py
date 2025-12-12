@@ -944,7 +944,7 @@ def render_home():
             st.session_state.config.api_client = "github" if "GitHub" in selected_api else "openai"
         
         # Model selection
-        model_options = ["openai/gpt-4.1", "openai/gpt-4o-mini", "openai/gpt-3.5-turbo"]
+        model_options = ["openai/gpt-4.1"]
         if st.session_state.config.api_client == "openai":
             model_options = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-4o", "gpt-4-vision-preview"]
         
@@ -1462,4 +1462,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
