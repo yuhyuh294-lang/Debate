@@ -876,7 +876,7 @@ def run_courtroom_analysis():
 
 # --- Main Pages ---
 def render_home():
-    st.markdown(TAB_STYLE, unsafe_allow_html=True)
+   
     """Trang chủ thiết lập"""
     st.title("🤖 AI Debate Bot – Thiết lập tranh luận")
     
@@ -1470,5 +1470,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
