@@ -6,6 +6,7 @@ import time
 import re
 import random 
 import json 
+import re
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -123,6 +124,9 @@ def init_session_state():
 init_session_state()
 
 # --- API Helper Functions ---
+def strip_persona_prefix(text: str) -> str:
+    return re.sub(r"^\s*\([^)]*\)\s*:\s*", "", text) if text else text
+
 def get_api_client():
     """Lấy API client dựa trên cấu hình"""
     config = st.session_state.config
@@ -785,7 +789,7 @@ def render_chat_messages():
 
         # ===== A =====
         if i < len(dialog_a):
-            msg_a = dialog_a[i]
+            msg_a = strip_persona_prefix(st.session_state.dialog_a[i])
             if msg_a:
                 st.markdown(f"""
                 <div style="display: flex; width: 100%; margin: 5px 0; padding: 0;">
@@ -802,7 +806,7 @@ def render_chat_messages():
 
         # ===== B (chỉ render nếu A cùng lượt tồn tại) =====
         if i < len(dialog_b) and i < len(dialog_a):
-            msg_b = dialog_b[i]
+            msg_b = strip_persona_prefix(st.session_state.dialog_b[i])
             if msg_b:
                 st.markdown(f"""
                 <div style="display: flex; width: 100%; margin: 5px 0; padding: 0; justify-content: flex-end;">
@@ -1590,6 +1594,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
