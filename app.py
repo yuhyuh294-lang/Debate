@@ -1284,11 +1284,11 @@ CHAT_STYLE = """
 <style>
 /* RESET STYLES ĐỂ SIDEBAR HIỂN THỊ ĐÚNG */
 [data-testid="stSidebar"] {
-    background-color: #0d1117 !important;
-    color: #c9d1d9 !important;
+    background-color: #f0f2f6 !important; /* MÀU XÁM NHẠT */
+    color: #262730 !important;
 }
 
-/* Main app background */
+/* Main app background - Giữ tối */
 [data-testid="stAppViewContainer"] {
     background-color: #0d1117;
     color: #c9d1d9;
@@ -1301,7 +1301,7 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
 }
 
-/* Chat bubbles */
+/* Chat bubbles - DÙNG MÀU XANH THỐNG NHẤT */
 .chat-bubble {
     padding: 15px 20px;
     border-radius: 18px;
@@ -1315,6 +1315,7 @@ h1, h2, h3, h4, h5, h6 {
     position: relative;
 }
 
+/* Container thống nhất - MÀU XANH #1e2d42 */
 .chat-container {
     display: flex;
     width: 100%;
@@ -1322,33 +1323,26 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0;
 }
 
-.speaker-header {
-    margin-bottom: 8px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.speaker-name {
-    font-weight: bold;
-    font-size: 14px;
-    letter-spacing: 0.5px;
-    display: block;
-}
-
-.message-content {
-    font-size: 15px;
-    line-height: 1.7;
-    margin-top: 5px;
-}
-
-/* Sidebar styles - FIXED */
-[data-testid="stSidebar"] {
-    background-color: #0d1117 !important;
+/* TẤT CẢ CÁC CONTAINER DÙNG MÀU XANH */
+[data-testid="stAppViewContainer"] div[style*="background"]:not([data-testid="stSidebar"] *),
+.stContainer, 
+.stExpander, 
+.stTabs [data-baseweb="tab"],
+div[class*="container"],
+div[class*="box"] {
+    background-color: #1e2d42 !important;
     color: #c9d1d9 !important;
+    border-color: #30363d !important;
+}
+
+/* Sidebar styles - XÁM */
+[data-testid="stSidebar"] {
+    background-color: #f0f2f6 !important;
+    color: #262730 !important;
 }
 
 [data-testid="stSidebar"] .stMarkdown {
-    color: #c9d1d9 !important;
+    color: #262730 !important;
 }
 
 [data-testid="stSidebar"] h1,
@@ -1357,13 +1351,13 @@ h1, h2, h3, h4, h5, h6 {
 [data-testid="stSidebar"] h4,
 [data-testid="stSidebar"] h5,
 [data-testid="stSidebar"] h6 {
-    color: #58a6ff !important;
+    color: #1e2d42 !important; /* Xanh đậm cho tiêu đề sidebar */
 }
 
 [data-testid="stSidebar"] .stSelectbox,
 [data-testid="stSidebar"] .stSlider,
 [data-testid="stSidebar"] .stButton {
-    color: #c9d1d9 !important;
+    color: #262730 !important;
 }
 
 /* Button styles */
@@ -1373,11 +1367,14 @@ h1, h2, h3, h4, h5, h6 {
     transition: all 0.3s;
     border: none;
     padding: 10px 20px;
+    background-color: #1e2d42 !important;
+    color: #c9d1d9 !important;
 }
 
 .stButton > button:hover {
     transform: translateY(-3px);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    background-color: #2a3f5f !important;
 }
 
 /* Custom scrollbar */
@@ -1403,30 +1400,13 @@ h1, h2, h3, h4, h5, h6 {
 /* Streamlit default components */
 .stSelectbox, .stSlider, .stTextInput, .stTextArea {
     color: #c9d1d9 !important;
+    background-color: #1e2d42 !important;
 }
 
-/* Success, Warning, Error messages */
-.stSuccess {
-    background: linear-gradient(135deg, #0e4429 0%, #1f362d 100%);
-    border-left: 5px solid #4cd964;
-    color: #c9d1d9 !important;
-}
-
-.stWarning {
-    background: linear-gradient(135deg, #423200 0%, #332700 100%);
-    border-left: 5px solid #ffd60a;
-    color: #c9d1d9 !important;
-}
-
-.stError {
-    background: linear-gradient(135deg, #58161b 0%, #3b2225 100%);
-    border-left: 5px solid #ff3b30;
-    color: #c9d1d9 !important;
-}
-
-.stInfo {
-    background: linear-gradient(135deg, #1e2d42 0%, #192f44 100%);
-    border-left: 5px solid #58a6ff;
+/* Success, Warning, Error messages - DÙNG MÀU XANH */
+.stSuccess, .stWarning, .stError, .stInfo {
+    background: #1e2d42 !important;
+    border-left: 5px solid #58a6ff !important;
     color: #c9d1d9 !important;
 }
 
@@ -1448,19 +1428,22 @@ hr {
     gap: 10px !important;
 }
 
-/* Tabs styling */
+/* Tabs styling - DÙNG MÀU XANH */
 .stTabs [data-baseweb="tab-list"] {
     gap: 2px;
+    background-color: #0d1117;
+    padding: 5px;
 }
 
 .stTabs [data-baseweb="tab"] {
     height: 50px;
     white-space: pre-wrap;
-    background-color: #1e2d42;
+    background-color: #1e2d42 !important; /* XANH */
     border-radius: 8px 8px 0 0;
     gap: 1px;
     padding-top: 10px;
     padding-bottom: 10px;
+    color: #c9d1d9 !important;
 }
 
 .stTabs [aria-selected="true"] {
@@ -1469,39 +1452,21 @@ hr {
 }
 
 /* Hiệu ứng chuyển tab mượt mà */
-.stTabs [data-baseweb="tab-list"] {
-    gap: 2px;
-    background-color: #0d1117;
-    padding: 5px;
-}
-
-.stTabs [data-baseweb="tab"] {
-    background-color: #1e2d42;
-    border-radius: 8px 8px 0 0;
-    padding: 12px 24px;
-    font-weight: 600;
-    transition: all 0.3s;
-}
-
 .stTabs [data-baseweb="tab"]:hover {
-    background-color: #2a3f5f;
-}
-
-.stTabs [aria-selected="true"] {
-    background-color: #0d1117 !important;
-    border-bottom: 3px solid #58a6ff !important;
+    background-color: #2a3f5f !important; /* Xanh nhạt hơn khi hover */
 }
 
 /* Chủ đề đã chọn */
 .selected-topic-box {
-    background-color: #1f362d;
+    background-color: #1e2d42 !important; /* XANH */
     padding: 15px;
     border-radius: 10px;
-    border-left: 5px solid #4cd964;
+    border-left: 5px solid #58a6ff;
     margin: 15px 0;
     font-size: 16px;
     font-weight: bold;
     transition: all 0.3s;
+    color: #c9d1d9 !important;
 }
 
 .selected-topic-box:hover {
@@ -1511,32 +1476,79 @@ hr {
 
 /* Đảm bảo sidebar components hiển thị đúng */
 div[data-baseweb="select"] > div {
+    background-color: #ffffff !important; /* TRẮNG trong sidebar */
+    color: #262730 !important;
+    border-color: #d0d7de !important;
+}
+
+/* Slider trong sidebar */
+div[data-baseweb="slider"] {
+    color: #262730 !important;
+}
+
+/* Label trong sidebar */
+[data-testid="stSidebar"] label {
+    color: #262730 !important;
+}
+
+/* Fix for select options */
+[role="listbox"] {
+    background-color: #ffffff !important;
+    color: #262730 !important;
+}
+
+[role="option"] {
+    color: #262730 !important;
+}
+
+[role="option"]:hover {
+    background-color: #f0f2f6 !important;
+}
+
+/* Card trong sidebar */
+[data-testid="stSidebar"] div[style*="background-color"] {
+    background-color: #ffffff !important;
+    color: #262730 !important;
+    border: 1px solid #d0d7de !important;
+}
+
+/* HP bar container - DÙNG MÀU XANH */
+div[style*="background-color: #1e2d42"] {
+    background-color: #1e2d42 !important;
+}
+
+/* Input fields trong main content */
+[data-testid="stAppViewContainer"] .stTextInput input,
+[data-testid="stAppViewContainer"] .stTextArea textarea,
+[data-testid="stAppViewContainer"] .stSelectbox > div,
+[data-testid="stAppViewContainer"] .stSlider > div {
     background-color: #1e2d42 !important;
     color: #c9d1d9 !important;
     border-color: #30363d !important;
 }
 
-div[data-baseweb="slider"] {
-    color: #c9d1d9 !important;
+/* Input fields trong sidebar */
+[data-testid="stSidebar"] .stTextInput input,
+[data-testid="stSidebar"] .stTextArea textarea,
+[data-testid="stSidebar"] .stSelectbox > div,
+[data-testid="stSidebar"] .stSlider > div {
+    background-color: #ffffff !important;
+    color: #262730 !important;
+    border-color: #d0d7de !important;
 }
 
-/* Fix label colors in sidebar */
-[data-testid="stSidebar"] label {
-    color: #c9d1d9 !important;
-}
-
-/* Fix for select options */
-[role="listbox"] {
+/* Expander trong main content */
+[data-testid="stAppViewContainer"] .stExpander {
     background-color: #1e2d42 !important;
     color: #c9d1d9 !important;
+    border-color: #30363d !important;
 }
 
-[role="option"] {
-    color: #c9d1d9 !important;
-}
-
-[role="option"]:hover {
-    background-color: #2a3f5f !important;
+/* Expander trong sidebar */
+[data-testid="stSidebar"] .stExpander {
+    background-color: #ffffff !important;
+    color: #262730 !important;
+    border-color: #d0d7de !important;
 }
 </style>
 """
@@ -1565,6 +1577,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
