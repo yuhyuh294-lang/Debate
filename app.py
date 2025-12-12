@@ -300,7 +300,7 @@ def generate_ai_reply(speaker: str, last_message: str = "") -> str:
     config = st.session_state.config
     
     if speaker == "A":
-        
+        persona = config.persona_a
         role = "Ủng hộ"
         opponent = config.persona_b
     else:  # speaker == "B"
@@ -311,10 +311,9 @@ def generate_ai_reply(speaker: str, last_message: str = "") -> str:
     prompt = f"""
     Bạn là {persona} ({role}) trong tranh luận.
     Chủ đề: {st.session_state.topic_used}
+    
     Phong cách: {config.style if not config.custom_style else config.custom_style}
-    
     Lời vừa rồi của đối phương: "{last_message[:300]}"
-    
     Hãy trả lời ngắn gọn, sắc bén (3-5 câu) theo tính cách {persona}.
     """
     
@@ -1566,6 +1565,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
