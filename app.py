@@ -1172,9 +1172,7 @@ def render_debate():
             border-left: 4px solid #58a6ff;
             margin-bottom: 15px;
         ">
-            <p style="margin: 8px 0;"><strong>Chế độ:</strong> {config.mode}</p>
-            <p style="margin: 8px 0;"><strong>Chủ đề:</strong> {st.session_state.topic_used}</p>
-            <p style="margin: 8px 0;"><strong>Phong cách:</strong> {st.session_state.final_style}</p>
+            
         """
         
         if config.mode == "Chế độ RPG (Game Tranh luận)":
@@ -1572,6 +1570,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
