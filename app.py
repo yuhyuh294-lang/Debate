@@ -116,10 +116,6 @@ def init_session_state():
     if "debate_finished" not in st.session_state:
         st.session_state.debate_finished = False
 
-    # Thêm biến mới để lưu chủ đề được chọn từ gợi ý
-    if "selected_suggested_topic" not in st.session_state:
-        st.session_state.selected_suggested_topic = None
-
 # Gọi khởi tạo
 init_session_state()
 
@@ -962,7 +958,7 @@ def render_home():
         if user_topic != st.session_state.config.topic:
             st.session_state.config.topic = user_topic
     
-    # Tab 2: Gợi ý chủ đề từ văn bản - CÁCH MỚI: Button cho từng chủ đề
+    # Tab 2: Gợi ý chủ đề từ văn bản
     with tab2:
         st.write("AI sẽ đề xuất chủ đề tranh luận thú vị:")
         
@@ -973,31 +969,27 @@ def render_home():
                 st.session_state.image_analysis_result = None
                 st.rerun()
         
-        # Hiển thị chủ đề đề xuất từ văn bản - CÁCH MỚI
+        # Hiển thị chủ đề đề xuất từ văn bản
         if st.session_state.suggested_topics and not st.session_state.image_analysis_result:
             st.markdown("**Chủ đề đề xuất:**")
             
-            # Tạo một container cho mỗi chủ đề với nút "Chọn" riêng
-            for i, topic in enumerate(st.session_state.suggested_topics):
-                # Tạo một card cho mỗi chủ đề
-                col1, col2, col3 = st.columns([1, 6, 1])
-                with col1:
-                    st.markdown(f"**{i+1}.**")
-                with col2:
-                    st.markdown(f"**{topic}**")
-                with col3:
-                    if st.button("✅ Chọn", key=f"choose_text_topic_{i}", use_container_width=True):
-                        # Gán chủ đề được chọn vào config.topic
-                        st.session_state.config.topic = topic
-                        # Xóa suggested_topics để không hiển thị nữa
-                        st.session_state.suggested_topics = None
-                        st.success(f"✅ Đã chọn chủ đề: **{topic}**")
-                        time.sleep(1)  # Hiển thị thông báo 1 giây
-                        st.rerun()
-                
-                st.divider()
+            # Tạo radio buttons cho việc chọn - CÁCH ĐƠN GIẢN NHẤT
+            selected_topic = st.radio(
+                "Chọn một chủ đề:",
+                st.session_state.suggested_topics,
+                key="text_topic_radio"
+            )
+            
+            # Nút áp dụng
+            if st.button("✅ Áp dụng chủ đề này", key="apply_text_topic", use_container_width=True):
+                # TRỰC TIẾP GÁN VÀO config.topic
+                st.session_state.config.topic = selected_topic
+                # Xóa suggested_topics để không hiển thị nữa
+                st.session_state.suggested_topics = None
+                st.success(f"Đã chọn chủ đề: {selected_topic}")
+                st.rerun()
     
-    # Tab 3: Phân tích hình ảnh - CÁCH MỚI: Button cho từng chủ đề
+    # Tab 3: Phân tích hình ảnh
     with tab3:
         st.write("Tải lên hình ảnh để AI phân tích và đề xuất chủ đề:")
         
@@ -1033,39 +1025,31 @@ def render_home():
             except Exception as e:
                 st.error(f"Lỗi khi mở ảnh: {str(e)}")
         
-        # Hiển thị kết quả phân tích ảnh - CÁCH MỚI
+        # Hiển thị kết quả phân tích ảnh
         if st.session_state.suggested_topics and st.session_state.image_analysis_result:
             st.markdown("**Chủ đề đề xuất từ hình ảnh:**")
             
-            # Tạo một container cho mỗi chủ đề với nút "Chọn" riêng
-            for i, topic in enumerate(st.session_state.suggested_topics):
-                # Tạo một card cho mỗi chủ đề
-                col1, col2, col3 = st.columns([1, 6, 1])
-                with col1:
-                    st.markdown(f"**{i+1}.**")
-                with col2:
-                    st.markdown(f"**{topic}**")
-                with col3:
-                    if st.button("✅ Chọn", key=f"choose_image_topic_{i}", use_container_width=True):
-                        # Gán chủ đề được chọn vào config.topic
-                        st.session_state.config.topic = topic
-                        # Xóa suggested_topics và image_analysis_result
-                        st.session_state.suggested_topics = None
-                        st.session_state.image_analysis_result = None
-                        st.success(f"✅ Đã chọn chủ đề từ ảnh: **{topic}**")
-                        time.sleep(1)  # Hiển thị thông báo 1 giây
-                        st.rerun()
-                
-                st.divider()
+            # Tạo radio buttons cho việc chọn
+            selected_topic = st.radio(
+                "Chọn một chủ đề từ hình ảnh:",
+                st.session_state.suggested_topics,
+                key="image_topic_radio"
+            )
+            
+            # Nút áp dụng
+            if st.button("✅ Áp dụng chủ đề từ ảnh", key="apply_image_topic", use_container_width=True):
+                # TRỰC TIẾP GÁN VÀO config.topic
+                st.session_state.config.topic = selected_topic
+                # Xóa suggested_topics và image_analysis_result
+                st.session_state.suggested_topics = None
+                st.session_state.image_analysis_result = None
+                st.success(f"Đã chọn chủ đề từ ảnh: {selected_topic}")
+                st.rerun()
     
     # Hiển thị chủ đề đang chọn (dùng chung cho cả 3 tabs)
     st.markdown("---")
     if st.session_state.config.topic:
-        st.markdown(f"""
-        <div class="selected-topic">
-            📋 <strong>Chủ đề đã chọn:</strong> {st.session_state.config.topic}
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"### 📋 Chủ đề đã chọn: `{st.session_state.config.topic}`")
     else:
         st.warning("⚠️ Chưa có chủ đề tranh luận. Vui lòng nhập hoặc chọn chủ đề từ các tab trên.")
     
@@ -1429,24 +1413,6 @@ hr {
     margin: 15px 0;
     font-size: 18px;
     font-weight: bold;
-    color: #e0f7e9 !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-/* Topic suggestion cards */
-.topic-card {
-    background-color: #1e2d42;
-    padding: 15px;
-    border-radius: 10px;
-    margin: 10px 0;
-    border: 1px solid #30363d;
-    transition: all 0.3s ease;
-}
-
-.topic-card:hover {
-    border-color: #58a6ff;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
 }
 </style>
 """
