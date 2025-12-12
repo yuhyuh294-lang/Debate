@@ -921,6 +921,7 @@ def run_courtroom_analysis():
         st.session_state.courtroom_analysis = analysis
 
 # --- Main Pages ---
+# --- Main Pages ---
 def render_home():
     """Trang chủ thiết lập"""
     st.title("🤖 AI Debate Bot – Thiết lập tranh luận")
@@ -1013,25 +1014,24 @@ def render_home():
                 st.write(f"- Định dạng: {uploaded_file.type}")
                 st.write(f"- Kích thước: {image.size[0]}x{image.size[1]} pixels")
             
-            # Nút phân tích ảnh
-            if st.button("🔍 AI Phân tích ảnh", type="primary", use_container_width=True):
-                with st.spinner("AI đang phân tích hình ảnh..."):
-                    try:
-                        # Phân tích ảnh để lấy chủ đề
-                        suggested_topics = analyze_image_for_topic(image)
+            # Nút phân tích ảnh - CHỈ CÓ 1 SPINNER Ở ĐÂY
+            if st.button("🔍 AI Phân tích ảnh", type="primary", use_container_width=True, key="analyze_image_btn"):
+                try:
+                    # Phân tích ảnh để lấy chủ đề - CHỈ DÙNG 1 SPINNER
+                    suggested_topics = analyze_image_for_topic(image)
+                    
+                    if suggested_topics and len(suggested_topics) > 0:
+                        st.session_state.suggested_topics = suggested_topics
+                        st.success(f"✅ AI đã đề xuất {len(suggested_topics)} chủ đề từ hình ảnh!")
                         
-                        if suggested_topics and len(suggested_topics) > 0:
-                            st.session_state.suggested_topics = suggested_topics
-                            st.success(f"✅ AI đã đề xuất {len(suggested_topics)} chủ đề từ hình ảnh!")
-                            
-                            # Hiển thị các chủ đề đề xuất
-                            st.markdown("**Chủ đề đề xuất từ hình ảnh:**")
-                            for idx, topic in enumerate(suggested_topics, 1):
-                                st.write(f"{idx}. {topic}")
-                        else:
-                            st.warning("Không thể phân tích được chủ đề từ hình ảnh.")
-                    except Exception as e:
-                        st.error(f"Lỗi khi phân tích ảnh: {str(e)}")
+                        # Hiển thị các chủ đề đề xuất
+                        st.markdown("**Chủ đề đề xuất từ hình ảnh:**")
+                        for idx, topic in enumerate(suggested_topics, 1):
+                            st.write(f"{idx}. {topic}")
+                    else:
+                        st.warning("Không thể phân tích được chủ đề từ hình ảnh.")
+                except Exception as e:
+                    st.error(f"Lỗi khi phân tích ảnh: {str(e)}")
         
         st.markdown("---")
         
@@ -1463,3 +1463,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
