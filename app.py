@@ -1177,12 +1177,6 @@ def render_debate():
             <p style="margin: 8px 0;"><strong>Phong cách:</strong> {st.session_state.final_style}</p>
         """
         
-        if config.mode == "Chế độ RPG (Game Tranh luận)":
-            rpg = st.session_state.rpg_state
-            html_content += f"""
-            <p style="margin: 8px 0;"><strong>{config.persona_a}:</strong> {rpg.hp_a} HP</p>
-            <p style="margin: 8px 0;"><strong>{config.persona_b}:</strong> {rpg.hp_b} HP</p>
-            """
         
         html_content += "</div>"
         
@@ -1572,6 +1566,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
