@@ -1357,7 +1357,7 @@ h1, h2, h3, h4, h5, h6 {
 [data-testid="stSidebar"] h4,
 [data-testid="stSidebar"] h5,
 [data-testid="stSidebar"] h6 {
-    color: #58a6ff !important;
+    color: #c9d1d9 !important;
 }
 
 [data-testid="stSidebar"] .stSelectbox,
@@ -1397,7 +1397,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #58a6ff;
+    background: #c9d1d9;
 }
 
 /* Streamlit default components */
@@ -1565,6 +1565,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
