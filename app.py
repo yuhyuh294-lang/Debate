@@ -1,4 +1,3 @@
-sao mất cái phân tích hình ảnh của tôi từ lúc nào rồi, cho lại cái cho nhập ảnh để AI phân tích ra chủ đề tranh luận
 import streamlit as st
 from PIL import Image
 import base64
@@ -1363,3 +1362,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
