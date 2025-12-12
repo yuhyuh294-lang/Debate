@@ -1226,7 +1226,7 @@ def render_debate():
         st.session_state.debate_finished = True
         st.session_state.debate_running = False
         
-        st.markdown("---")
+        
         
         if "CHIẾN THẮNG" in victory_msg or "HÒA" in victory_msg:
             st.success(victory_msg)
@@ -1572,3 +1572,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
