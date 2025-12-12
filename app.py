@@ -178,7 +178,6 @@ def call_chat(messages: List[Dict], model: str = None, temperature: float = None
 def encode_image_to_base64(image: Image.Image) -> str:
     """Chuyển đổi ảnh PIL thành base64 string"""
     buffered = io.BytesIO()
-    # Convert ảnh sang RGB nếu có kênh alpha
     if image.mode in ('RGBA', 'LA') or (image.mode == 'P' and 'transparency' in image.info):
         image = image.convert('RGB')
     image.save(buffered, format="JPEG")
@@ -187,10 +186,8 @@ def encode_image_to_base64(image: Image.Image) -> str:
 def analyze_image_for_topic(image: Image.Image) -> List[str]:
     """Phân tích ảnh để đề xuất chủ đề tranh luận"""
     try:
-        # Encode ảnh thành base64
         base64_image = encode_image_to_base64(image)
         
-        # Tạo prompt cho AI phân tích ảnh
         prompt = """
         Hãy phân tích hình ảnh này và đề xuất 3 chủ đề tranh luận thú vị, gây tranh cãi dựa trên nội dung hình ảnh.
         Mỗi chủ đề nên có tính tranh luận cao, có thể phân tích từ nhiều góc độ.
@@ -202,7 +199,6 @@ def analyze_image_for_topic(image: Image.Image) -> List[str]:
         Chỉ trả về danh sách chủ đề, không thêm giải thích gì khác.
         """
         
-        # Tạo messages với ảnh
         messages = [
             {
                 "role": "user",
@@ -219,7 +215,6 @@ def analyze_image_for_topic(image: Image.Image) -> List[str]:
             }
         ]
         
-        # Sử dụng model hỗ trợ vision
         model_to_use = "gpt-4o" if OPENAI_API_KEY else st.session_state.config.model
         
         client = get_api_client()
@@ -232,13 +227,11 @@ def analyze_image_for_topic(image: Image.Image) -> List[str]:
         
         topics_text = response.choices[0].message.content
         
-        # Parse kết quả
         topics = []
         lines = topics_text.strip().split('\n')
         for line in lines:
             line = line.strip()
             if line and (line[0].isdigit() or line.startswith('-') or line.startswith('*')):
-                # Xóa số, dấu gạch đầu dòng
                 clean_line = re.sub(r'^[0-9\.\-\*\)\]]+\s*', '', line)
                 if clean_line and len(clean_line) > 10:
                     topics.append(clean_line)
@@ -255,13 +248,11 @@ def generate_text_topics() -> List[str]:
     
     response = call_chat([{"role": "user", "content": prompt}])
     
-    # Parse kết quả
     topics = []
     lines = response.strip().split('\n')
     for line in lines:
         line = line.strip()
         if line and len(line) > 10:
-            # Xóa số và ký tự đầu dòng
             clean_line = re.sub(r'^[0-9\.\-\*\)\]]+\s*', '', line)
             if clean_line:
                 topics.append(clean_line)
@@ -291,7 +282,6 @@ def generate_opening_statements() -> Tuple[str, str, str]:
     
     response = call_chat([{"role": "user", "content": prompt}])
     
-    # Parse response
     a_match = re.search(r'A[:\-]?\s*(.*?)(?:\n\n|\nB|$)', response, re.DOTALL | re.IGNORECASE)
     b_match = re.search(r'B[:\-]?\s*(.*?)(?:\n\n|\nC|$)', response, re.DOTALL | re.IGNORECASE)
     c_match = re.search(r'C[:\-]?\s*(.*?)(?:\n\n|$)', response, re.DOTALL | re.IGNORECASE)
@@ -957,12 +947,16 @@ def render_home():
     
     # Tab 1: Nhập thủ công
     with tab1:
-        st.session_state.config.topic = st.text_input(
+        # ĐẢM BẢO: Luôn dùng st.session_state.config.topic làm giá trị chính
+        user_topic = st.text_input(
             "Nhập chủ đề tranh luận của bạn:",
             value=st.session_state.config.topic,
             placeholder="Ví dụ: Giai cấp thống trị và bị trị",
             key="manual_topic_input"
         )
+        # LUÔN CẬP NHẬT
+        if user_topic != st.session_state.config.topic:
+            st.session_state.config.topic = user_topic
     
     # Tab 2: Gợi ý chủ đề từ văn bản
     with tab2:
@@ -978,18 +972,22 @@ def render_home():
         # Hiển thị chủ đề đề xuất từ văn bản
         if st.session_state.suggested_topics and not st.session_state.image_analysis_result:
             st.markdown("**Chủ đề đề xuất:**")
-            for idx, topic in enumerate(st.session_state.suggested_topics, 1):
-                col1, col2 = st.columns([4, 1])
-                with col1:
-                    st.write(f"**{idx}. {topic}**")
-                with col2:
-                    # Dùng callback để xử lý khi nhấn nút
-                    if st.button("Chọn", key=f"select_text_topic_{idx}", use_container_width=True):
-                        st.session_state.config.topic = topic
-                        st.session_state.suggested_topics = None
-                        st.success(f"✅ Đã chọn chủ đề: {topic}")
-                        time.sleep(0.5)  # Hiển thị thông báo ngắn
-                        st.rerun()
+            
+            # Tạo radio buttons cho việc chọn - CÁCH ĐƠN GIẢN NHẤT
+            selected_topic = st.radio(
+                "Chọn một chủ đề:",
+                st.session_state.suggested_topics,
+                key="text_topic_radio"
+            )
+            
+            # Nút áp dụng
+            if st.button("✅ Áp dụng chủ đề này", key="apply_text_topic", use_container_width=True):
+                # TRỰC TIẾP GÁN VÀO config.topic
+                st.session_state.config.topic = selected_topic
+                # Xóa suggested_topics để không hiển thị nữa
+                st.session_state.suggested_topics = None
+                st.success(f"Đã chọn chủ đề: {selected_topic}")
+                st.rerun()
     
     # Tab 3: Phân tích hình ảnh
     with tab3:
@@ -1030,21 +1028,25 @@ def render_home():
         # Hiển thị kết quả phân tích ảnh
         if st.session_state.suggested_topics and st.session_state.image_analysis_result:
             st.markdown("**Chủ đề đề xuất từ hình ảnh:**")
-            for idx, topic in enumerate(st.session_state.suggested_topics, 1):
-                col1, col2 = st.columns([4, 1])
-                with col1:
-                    st.write(f"**{idx}. {topic}**")
-                with col2:
-                    # Dùng callback để xử lý khi nhấn nút
-                    if st.button("Chọn", key=f"select_img_topic_{idx}", use_container_width=True):
-                        st.session_state.config.topic = topic
-                        st.session_state.suggested_topics = None
-                        st.session_state.image_analysis_result = None
-                        st.success(f"✅ Đã chọn chủ đề từ ảnh: {topic}")
-                        time.sleep(0.5)  # Hiển thị thông báo ngắn
-                        st.rerun()
+            
+            # Tạo radio buttons cho việc chọn
+            selected_topic = st.radio(
+                "Chọn một chủ đề từ hình ảnh:",
+                st.session_state.suggested_topics,
+                key="image_topic_radio"
+            )
+            
+            # Nút áp dụng
+            if st.button("✅ Áp dụng chủ đề từ ảnh", key="apply_image_topic", use_container_width=True):
+                # TRỰC TIẾP GÁN VÀO config.topic
+                st.session_state.config.topic = selected_topic
+                # Xóa suggested_topics và image_analysis_result
+                st.session_state.suggested_topics = None
+                st.session_state.image_analysis_result = None
+                st.success(f"Đã chọn chủ đề từ ảnh: {selected_topic}")
+                st.rerun()
     
-    # Hiển thị chủ đề đang chọn (dùng chung cho cả 3 tabs) - DI CHUYỂN LÊN TRÊN
+    # Hiển thị chủ đề đang chọn (dùng chung cho cả 3 tabs)
     st.markdown("---")
     if st.session_state.config.topic:
         st.markdown(f"### 📋 Chủ đề đã chọn: `{st.session_state.config.topic}`")
