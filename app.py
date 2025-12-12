@@ -178,7 +178,7 @@ def encode_image_to_base64(image: Image.Image) -> str:
     image.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
-def analyze_image_for_topic(image: Image.Image) -> str:
+def analyze_image_for_topic(image: Image.Image) -> List[str]:
     """Phân tích ảnh để đề xuất chủ đề tranh luận"""
     try:
         # Encode ảnh thành base64
@@ -221,29 +221,29 @@ def analyze_image_for_topic(image: Image.Image) -> str:
             }
         ]
         
-        with st.spinner("🤖 AI đang phân tích hình ảnh..."):
-            client = get_api_client()
-            response = client.chat.completions.create(
-                model=model_to_use,
-                messages=messages,
-                max_tokens=500,
-                temperature=0.7
-            )
-            
-            topics_text = response.choices[0].message.content
-            
-            # Parse kết quả
-            topics = []
-            lines = topics_text.strip().split('\n')
-            for line in lines:
-                line = line.strip()
-                if line and (line[0].isdigit() and '.' in line[:3]):
-                    # Xóa số và dấu chấm
-                    topic = line.split('.', 1)[1].strip()
-                    topics.append(topic)
-            
-            return topics[:3]  # Chỉ lấy 3 chủ đề đầu tiên
-            
+        # XÓA SPINNER Ở ĐÂY
+        client = get_api_client()
+        response = client.chat.completions.create(
+            model=model_to_use,
+            messages=messages,
+            max_tokens=500,
+            temperature=0.7
+        )
+        
+        topics_text = response.choices[0].message.content
+        
+        # Parse kết quả
+        topics = []
+        lines = topics_text.strip().split('\n')
+        for line in lines:
+            line = line.strip()
+            if line and (line[0].isdigit() and '.' in line[:3]):
+                # Xóa số và dấu chấm
+                topic = line.split('.', 1)[1].strip()
+                topics.append(topic)
+        
+        return topics[:3]  # Chỉ lấy 3 chủ đề đầu tiên
+        
     except Exception as e:
         st.error(f"Lỗi phân tích ảnh: {str(e)[:200]}")
         # Fallback: dùng text-only nếu vision không hoạt động
@@ -259,7 +259,6 @@ def analyze_image_for_topic(image: Image.Image) -> str:
                 topics.append(line)
         
         return topics[:3]
-
 # --- Debate Logic Functions ---
 def generate_opening_statements() -> Tuple[str, str, str]:
     """Tạo lời mở đầu cho tất cả các bên"""
@@ -1463,3 +1462,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
