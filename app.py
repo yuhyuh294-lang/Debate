@@ -997,41 +997,41 @@ def render_home():
             st.rerun()
 
 def render_debate():
-  def render_debate():
     """Trang tranh luận chính"""
     st.title("🔥 Cuộc tranh luận")
     
     config = st.session_state.config
     
-    # Sidebar info - SỬA LẠI: tạo toàn bộ HTML trong một chuỗi
+    # Sidebar info - SỬA LẠI: không dùng HTML phức tạp
     with st.sidebar:
         st.header("📊 Thông tin")
         
-        # Tạo toàn bộ HTML trong một chuỗi duy nhất
-        html_content = f"""
-        <div style="
-            background-color: #1e2d42; 
-            padding: 15px; 
-            border-radius: 10px; 
-            border-left: 4px solid #58a6ff;
-            margin-bottom: 15px;
-        ">
-            <p style="margin: 8px 0;"><strong>Chế độ:</strong> {config.mode}</p>
-            <p style="margin: 8px 0;"><strong>Chủ đề:</strong> {st.session_state.topic_used}</p>
-            <p style="margin: 8px 0;"><strong>Phong cách:</strong> {st.session_state.final_style}</p>
-        """
+        # Tạo một container với background và border
+        st.markdown(
+            """
+            <div style="
+                background-color: #1e2d42; 
+                padding: 15px; 
+                border-radius: 10px; 
+                border-left: 4px solid #58a6ff;
+                margin-bottom: 15px;
+            ">
+            """, 
+            unsafe_allow_html=True
+        )
+        
+        # Hiển thị thông tin bằng markdown đơn giản
+        st.markdown(f"**Chế độ:** {config.mode}")
+        st.markdown(f"**Chủ đề:** {st.session_state.topic_used}")
+        st.markdown(f"**Phong cách:** {st.session_state.final_style}")
         
         if config.mode == "Chế độ RPG (Game Tranh luận)":
             rpg = st.session_state.rpg_state
-            html_content += f"""
-            <p style="margin: 8px 0;"><strong>{config.persona_a}:</strong> {rpg.hp_a} HP</p>
-            <p style="margin: 8px 0;"><strong>{config.persona_b}:</strong> {rpg.hp_b} HP</p>
-            """
+            st.markdown(f"**{config.persona_a}:** {rpg.hp_a} HP")
+            st.markdown(f"**{config.persona_b}:** {rpg.hp_b} HP")
         
-        html_content += "</div>"
-        
-        # Hiển thị toàn bộ HTML trong một lần duy nhất
-        st.markdown(html_content, unsafe_allow_html=True)
+        # Đóng thẻ div
+        st.markdown("</div>", unsafe_allow_html=True)
         
         st.markdown("---")
         
@@ -1302,4 +1302,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
