@@ -754,22 +754,27 @@ def render_user_input():
 
 
 def render_chat_messages():
-    """Hiển thị các tin nhắn trong chat"""
+    """Hiển thị các tin nhắn trong chat (FIX THỨ TỰ – GIỮ NGUYÊN STYLE)"""
     config = st.session_state.config
     debate_state = st.session_state.get('debate_state', DebateState())
-    
-    max_messages = max(len(st.session_state.dialog_a), 
-                      len(st.session_state.dialog_b),
-                      len(st.session_state.dialog_c))
-    
+
+    dialog_a = st.session_state.dialog_a
+    dialog_b = st.session_state.dialog_b
+    dialog_c = st.session_state.dialog_c
+
+    # A là người mở lượt → số vòng hợp lệ
+    max_rounds = len(dialog_a)
+
     if debate_state.is_fast_mode:
-        display_count = max_messages
+        display_rounds = max_rounds
     else:
-        display_count = min(debate_state.current_display_index + 1, max_messages)
-    
-    for i in range(display_count):
-        if i < len(st.session_state.dialog_a):
-            msg_a = st.session_state.dialog_a[i]
+        display_rounds = min(debate_state.current_display_index + 1, max_rounds)
+
+    for i in range(display_rounds):
+
+        # ===== A =====
+        if i < len(dialog_a):
+            msg_a = dialog_a[i]
             if msg_a:
                 st.markdown(f"""
                 <div style="display: flex; width: 100%; margin: 5px 0; padding: 0;">
@@ -783,9 +788,10 @@ def render_chat_messages():
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-        
-        if i < len(st.session_state.dialog_b):
-            msg_b = st.session_state.dialog_b[i]
+
+        # ===== B (chỉ render nếu A cùng lượt tồn tại) =====
+        if i < len(dialog_b) and i < len(dialog_a):
+            msg_b = dialog_b[i]
             if msg_b:
                 st.markdown(f"""
                 <div style="display: flex; width: 100%; margin: 5px 0; padding: 0; justify-content: flex-end;">
@@ -799,9 +805,15 @@ def render_chat_messages():
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-        
-        if i < len(st.session_state.dialog_c) and config.mode == "Tham gia 3 bên (Thành viên C)":
-            msg_c = st.session_state.dialog_c[i]
+
+        # ===== C (chỉ render nếu A & B đã có) =====
+        if (
+            config.mode == "Tham gia 3 bên (Thành viên C)"
+            and i < len(dialog_c)
+            and i < len(dialog_a)
+            and i < len(dialog_b)
+        ):
+            msg_c = dialog_c[i]
             if msg_c:
                 st.markdown(f"""
                 <div style="display: flex; width: 100%; margin: 5px 0; padding: 0; justify-content: center;">
@@ -815,11 +827,13 @@ def render_chat_messages():
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-    
-    if not debate_state.is_fast_mode and debate_state.current_display_index < max_messages:
+
+    # ===== Animation (GIỮ NGUYÊN HÀNH VI CŨ) =====
+    if not debate_state.is_fast_mode and debate_state.current_display_index < max_rounds - 1:
         debate_state.current_display_index += 1
         time.sleep(0.3)
         st.rerun()
+
 def run_courtroom_analysis():
     """Chạy phân tích phiên tòa AI"""
     config = st.session_state.config
@@ -1565,6 +1579,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
