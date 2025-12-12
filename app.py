@@ -876,14 +876,57 @@ def run_courtroom_analysis():
 
 # --- Main Pages ---
 def render_home():
-   
     """Trang chủ thiết lập"""
     st.title("🤖 AI Debate Bot – Thiết lập tranh luận")
     
-    # Sidebar settings (giữ nguyên)
+    # Sidebar settings - ĐẦY ĐỦ
     with st.sidebar:
         st.header("⚙️ Cài đặt Nâng cao")
-        # ... (giữ nguyên phần sidebar)
+        
+        # API selection
+        api_options = []
+        if GITHUB_TOKEN:
+            api_options.append("GitHub Models")
+        if OPENAI_API_KEY:
+            api_options.append("OpenAI Official")
+        
+        if api_options:
+            selected_api = st.selectbox(
+                "API Provider:",
+                api_options,
+                index=0
+            )
+            st.session_state.config.api_client = "github" if "GitHub" in selected_api else "openai"
+        
+        # Model selection
+        model_options = ["openai/gpt-4.1", "openai/gpt-4o-mini", "openai/gpt-3.5-turbo"]
+        if st.session_state.config.api_client == "openai":
+            model_options = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-4o", "gpt-4-vision-preview"]
+        
+        st.session_state.config.model = st.selectbox(
+            "Model:",
+            model_options,
+            index=0
+        )
+        
+        st.session_state.config.temperature = st.slider(
+            "Độ sáng tạo", 0.0, 1.0, 0.6, 0.1
+        )
+        
+        st.session_state.config.rounds = st.slider(
+            "Số lượt mỗi bên", 1, 10, 3
+        )
+        
+        st.session_state.config.max_tokens = st.slider(
+            "Token tối đa/lượt", 100, 1000, 600, 50
+        )
+        
+        if st.button("🔄 Reset Debate", type="secondary", use_container_width=True):
+            for key in list(st.session_state.keys()):
+                if key not in ["config", "page"]:
+                    del st.session_state[key]
+            init_session_state()
+            st.rerun()
     
     # 1. Chế độ tranh luận (giữ nguyên)
     st.subheader("1) Chế độ Tranh luận")
@@ -1246,11 +1289,20 @@ def render_debate():
 # --- CSS Style ---
 CHAT_STYLE = """
 <style>
-.stApp {
+/* RESET STYLES ĐỂ SIDEBAR HIỂN THỊ ĐÚNG */
+[data-testid="stSidebar"] {
+    background-color: #0d1117 !important;
+    color: #c9d1d9 !important;
+}
+
+/* Main app background */
+[data-testid="stAppViewContainer"] {
     background-color: #0d1117;
     color: #c9d1d9;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
+
+/* Main content headings */
 h1, h2, h3, h4, h5, h6 {
     color: #58a6ff;
     font-weight: 600;
@@ -1296,9 +1348,29 @@ h1, h2, h3, h4, h5, h6 {
     margin-top: 5px;
 }
 
-/* Sidebar styles */
+/* Sidebar styles - FIXED */
+[data-testid="stSidebar"] {
+    background-color: #0d1117 !important;
+    color: #c9d1d9 !important;
+}
+
 [data-testid="stSidebar"] .stMarkdown {
-    margin: 5px 0;
+    color: #c9d1d9 !important;
+}
+
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] h4,
+[data-testid="stSidebar"] h5,
+[data-testid="stSidebar"] h6 {
+    color: #58a6ff !important;
+}
+
+[data-testid="stSidebar"] .stSelectbox,
+[data-testid="stSidebar"] .stSlider,
+[data-testid="stSidebar"] .stButton {
+    color: #c9d1d9 !important;
 }
 
 /* Button styles */
@@ -1335,25 +1407,34 @@ h1, h2, h3, h4, h5, h6 {
     background: #58a6ff;
 }
 
+/* Streamlit default components */
+.stSelectbox, .stSlider, .stTextInput, .stTextArea {
+    color: #c9d1d9 !important;
+}
+
 /* Success, Warning, Error messages */
 .stSuccess {
     background: linear-gradient(135deg, #0e4429 0%, #1f362d 100%);
     border-left: 5px solid #4cd964;
+    color: #c9d1d9 !important;
 }
 
 .stWarning {
     background: linear-gradient(135deg, #423200 0%, #332700 100%);
     border-left: 5px solid #ffd60a;
+    color: #c9d1d9 !important;
 }
 
 .stError {
     background: linear-gradient(135deg, #58161b 0%, #3b2225 100%);
     border-left: 5px solid #ff3b30;
+    color: #c9d1d9 !important;
 }
 
 .stInfo {
     background: linear-gradient(135deg, #1e2d42 0%, #192f44 100%);
     border-left: 5px solid #58a6ff;
+    color: #c9d1d9 !important;
 }
 
 /* Streamlit divider line style */
@@ -1394,16 +1475,6 @@ hr {
     border-bottom: 3px solid #58a6ff !important;
 }
 
-/* Selected topic styling */
-.selected-topic {
-    background-color: #1f362d;
-    padding: 15px;
-    border-radius: 10px;
-    border-left: 5px solid #4cd964;
-    margin: 15px 0;
-    font-size: 18px;
-    font-weight: bold;
-}
 /* Hiệu ứng chuyển tab mượt mà */
 .stTabs [data-baseweb="tab-list"] {
     gap: 2px;
@@ -1444,6 +1515,36 @@ hr {
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
 }
+
+/* Đảm bảo sidebar components hiển thị đúng */
+div[data-baseweb="select"] > div {
+    background-color: #1e2d42 !important;
+    color: #c9d1d9 !important;
+    border-color: #30363d !important;
+}
+
+div[data-baseweb="slider"] {
+    color: #c9d1d9 !important;
+}
+
+/* Fix label colors in sidebar */
+[data-testid="stSidebar"] label {
+    color: #c9d1d9 !important;
+}
+
+/* Fix for select options */
+[role="listbox"] {
+    background-color: #1e2d42 !important;
+    color: #c9d1d9 !important;
+}
+
+[role="option"] {
+    color: #c9d1d9 !important;
+}
+
+[role="option"]:hover {
+    background-color: #2a3f5f !important;
+}
 </style>
 """
 
@@ -1461,6 +1562,7 @@ def main():
         }
     )
     
+    # Áp dụng CSS
     st.markdown(CHAT_STYLE, unsafe_allow_html=True)
     
     if st.session_state.page == "home":
@@ -1470,6 +1572,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
