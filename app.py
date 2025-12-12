@@ -514,8 +514,6 @@ def render_hp_display():
         with st.expander("📜 Nhật ký chiến đấu", expanded=True):
             for log in reversed(rpg.log[-8:]):
                 st.write(f"• {log}")
-    
-    st.markdown("---")
 
 def render_control_buttons():
     """Hiển thị các nút điều khiển"""
@@ -1004,25 +1002,30 @@ def render_debate():
     
     config = st.session_state.config
     
-    # Sidebar info - chỉ hiển thị thông tin cơ bản
+    # Sidebar info - sửa lại để không có ô xanh dư thừa
     with st.sidebar:
         st.header("📊 Thông tin")
         
-        # Hiển thị thông tin dạng card
-        st.markdown("""
-        <div style="background-color: #1e2d42; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #58a6ff;">
-        """, unsafe_allow_html=True)
-        
-        st.markdown(f"**Chế độ:** {config.mode}")
-        st.markdown(f"**Chủ đề:** {st.session_state.topic_used}")
-        st.markdown(f"**Phong cách:** {st.session_state.final_style}")
+        # Gộp tất cả vào một card duy nhất
+        info_html = f"""
+        <div style="background-color: #1e2d42; padding: 15px; border-radius: 10px; border-left: 4px solid #58a6ff;">
+            <p style="margin: 8px 0;"><strong>Chế độ:</strong> {config.mode}</p>
+            <p style="margin: 8px 0;"><strong>Chủ đề:</strong> {st.session_state.topic_used}</p>
+            <p style="margin: 8px 0;"><strong>Phong cách:</strong> {st.session_state.final_style}</p>
+        """
         
         if config.mode == "Chế độ RPG (Game Tranh luận)":
             rpg = st.session_state.rpg_state
-            st.markdown(f"**{config.persona_a}:** {rpg.hp_a} HP")
-            st.markdown(f"**{config.persona_b}:** {rpg.hp_b} HP")
+            info_html += f"""
+            <p style="margin: 8px 0;"><strong>{config.persona_a}:</strong> {rpg.hp_a} HP</p>
+            <p style="margin: 8px 0;"><strong>{config.persona_b}:</strong> {rpg.hp_b} HP</p>
+            """
         
-        st.markdown("</div>", unsafe_allow_html=True)
+        info_html += "</div>"
+        
+        st.markdown(info_html, unsafe_allow_html=True)
+        
+        st.markdown("---")
         
         if st.button("🔙 Về trang chủ", use_container_width=True, key="back_home"):
             st.session_state.page = "home"
@@ -1050,6 +1053,7 @@ def render_debate():
     if config.mode == "Chế độ RPG (Game Tranh luận)":
         render_hp_display()
     
+    # CHỈ MỘT DÒNG KẺ DUY NHẤT trước các nút điều khiển
     st.markdown("---")
     
     # Hiển thị các nút điều khiển
@@ -1188,28 +1192,6 @@ h1, h2, h3, h4, h5, h6 {
     margin-top: 5px;
 }
 
-.chat-left {
-    background: linear-gradient(135deg, #1f362d 0%, #2a4a3d 100%);
-    color: #e0f7e9 !important;
-    margin-right: auto;
-    border-top-left-radius: 4px;
-    border: 1px solid #2a4a3d;
-}
-.chat-left .speaker-name {
-    color: #4cd964 !important;
-}
-
-.chat-right {
-    background: linear-gradient(135deg, #3b2225 0%, #4d2c30 100%);
-    color: #ffe5d9 !important;
-    margin-left: auto;
-    border-top-right-radius: 4px;
-    border: 1px solid #4d2c30;
-}
-.chat-right .speaker-name {
-    color: #ff9500 !important;
-}
-
 /* Sidebar info card - Sửa ô xanh không nội dung */
 .sidebar-card {
     background-color: #1e2d42;
@@ -1217,6 +1199,10 @@ h1, h2, h3, h4, h5, h6 {
     border-radius: 10px;
     margin-bottom: 15px;
     border-left: 4px solid #58a6ff;
+}
+
+.sidebar-card p {
+    margin: 8px 0;
 }
 
 /* HP bars */
@@ -1245,11 +1231,10 @@ h1, h2, h3, h4, h5, h6 {
     margin: 5px 0;
 }
 
-/* Battle log - Sửa đường kẻ phân cách */
+/* Battle log */
 .battle-log {
     margin-top: 15px;
     padding-top: 15px;
-    border-top: 1px solid #30363d;
 }
 
 /* Sửa khoảng cách giữa các phần tử */
@@ -1262,15 +1247,6 @@ div[data-testid="stHorizontalBlock"] {
 .main .block-container {
     padding-top: 1rem;
     padding-bottom: 1rem;
-}
-
-/* Info box trong sidebar */
-[data-testid="stSidebar"] .sidebar-card {
-    background-color: #1e2d42;
-    border: 1px solid #30363d;
-    border-radius: 10px;
-    padding: 15px;
-    margin: 10px 0;
 }
 
 /* Text area */
@@ -1341,6 +1317,30 @@ div[data-testid="stHorizontalBlock"] {
 .stInfo {
     background: linear-gradient(135deg, #1e2d42 0%, #192f44 100%);
     border-left: 5px solid #58a6ff;
+}
+
+/* Streamlit divider line style */
+hr {
+    border: none;
+    height: 1px;
+    background-color: #30363d;
+    margin: 20px 0;
+}
+
+/* Fix for extra spacing in containers */
+[data-testid="stVerticalBlock"] > div {
+    padding: 0 !important;
+}
+
+/* Fix for sidebar spacing */
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+    gap: 10px !important;
+}
+
+/* Remove extra borders */
+[data-testid="stExpander"] {
+    border: none !important;
+    background-color: transparent !important;
 }
 </style>
 """
