@@ -1,7 +1,6 @@
 import streamlit as st
 from PIL import Image
 import base64
-import io
 import os
 import time
 import re
@@ -10,6 +9,7 @@ import json
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
+import io
 
 # --- Cấu hình và Khởi tạo ---
 try:
@@ -174,75 +174,103 @@ def call_chat(messages: List[Dict], model: str = None, temperature: float = None
         st.error(f"Lỗi API: {str(e)[:200]}")
         return f"[[LỖI: {str(e)[:100]}]]"
 
-def analyze_image_with_vision(image: Image.Image) -> str:
-    """Phân tích hình ảnh bằng Vision API - CHỈ dùng khi có OpenAI API key"""
+# --- Hàm xử lý ảnh ---
+def encode_image_to_base64(image: Image.Image) -> str:
+    """Chuyển đổi ảnh PIL thành base64 string"""
+    buffered = io.BytesIO()
+    # Convert ảnh sang RGB nếu có kênh alpha
+    if image.mode in ('RGBA', 'LA') or (image.mode == 'P' and 'transparency' in image.info):
+        image = image.convert('RGB')
+    image.save(buffered, format="JPEG")
+    return base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+def analyze_image_for_topic(image: Image.Image) -> List[str]:
+    """Phân tích ảnh để đề xuất chủ đề tranh luận"""
     try:
-        # Chỉ sử dụng nếu có OpenAI API key
-        if not OPENAI_API_KEY:
-            return "⚠️ Cần OpenAI API key để phân tích hình ảnh."
+        # Encode ảnh thành base64
+        base64_image = encode_image_to_base64(image)
         
-        # Chuyển đổi hình ảnh thành base64
-        buffered = io.BytesIO()
-        image.save(buffered, format="JPEG")
-        img_str = base64.b64encode(buffered.getvalue()).decode()
+        # Tạo prompt cho AI phân tích ảnh
+        prompt = """
+        Hãy phân tích hình ảnh này và đề xuất 3 chủ đề tranh luận thú vị, gây tranh cãi dựa trên nội dung hình ảnh.
+        Mỗi chủ đề nên có tính tranh luận cao, có thể phân tích từ nhiều góc độ.
+        Trả về dưới dạng:
+        1. [Chủ đề 1]
+        2. [Chủ đề 2]  
+        3. [Chủ đề 3]
         
-        # Sử dụng OpenAI client với gpt-4o (hỗ trợ vision)
-        client = OpenAI(api_key=OPENAI_API_KEY)
+        Chỉ trả về danh sách chủ đề, không thêm giải thích gì khác.
+        """
         
-        response = client.chat.completions.create(
-            model="gpt-4o",  # Model hỗ trợ vision
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text", 
-                            "text": "Hãy phân tích hình ảnh này và đề xuất 3 chủ đề tranh luận thú vị, gây tranh cãi từ nội dung hình ảnh. Trả về dưới dạng danh sách các chủ đề, mỗi chủ đề một dòng."
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{img_str}"
-                            }
+        # Tạo messages với ảnh
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}",
+                            "detail": "low"
                         }
-                    ]
-                }
-            ],
+                    }
+                ]
+            }
+        ]
+        
+        # Sử dụng model hỗ trợ vision
+        model_to_use = "gpt-4o" if OPENAI_API_KEY else st.session_state.config.model
+        
+        client = get_api_client()
+        response = client.chat.completions.create(
+            model=model_to_use,
+            messages=messages,
             max_tokens=500,
             temperature=0.7
         )
         
-        return response.choices[0].message.content
+        topics_text = response.choices[0].message.content
         
+        # Parse kết quả
+        topics = []
+        lines = topics_text.strip().split('\n')
+        for line in lines:
+            line = line.strip()
+            if line and (line[0].isdigit() or line.startswith('-') or line.startswith('*')):
+                # Xóa số, dấu gạch đầu dòng
+                clean_line = re.sub(r'^[0-9\.\-\*\)\]]+\s*', '', line)
+                if clean_line and len(clean_line) > 10:
+                    topics.append(clean_line)
+        
+        return topics[:3] if topics else ["Không thể phân tích chủ đề từ hình ảnh này."]
+            
     except Exception as e:
-        return f"⚠️ Lỗi phân tích hình ảnh: {str(e)[:100]}"
+        st.error(f"Lỗi phân tích ảnh: {str(e)[:200]}")
+        return ["Lỗi khi phân tích hình ảnh. Vui lòng thử lại."]
 
-def generate_text_topics():
-    """Tạo chủ đề từ văn bản - SỬA LỖI: đảm bảo trả về danh sách"""
-    prompt = "Hãy đề xuất 3 chủ đề tranh luận thú vị, gây tranh cãi và đa chiều. Trả về dưới dạng danh sách, mỗi chủ đề một dòng, không đánh số."
+def generate_text_topics() -> List[str]:
+    """Tạo chủ đề từ văn bản"""
+    prompt = "Hãy đề xuất 3 chủ đề tranh luận thú vị, gây tranh cãi và đa chiều về xã hội, công nghệ, hoặc đạo đức. Trả về dưới dạng danh sách, mỗi chủ đề một dòng."
     
     response = call_chat([{"role": "user", "content": prompt}])
     
-    # Parse response thành danh sách
+    # Parse kết quả
     topics = []
     lines = response.strip().split('\n')
-    
     for line in lines:
         line = line.strip()
-        # Loại bỏ số, dấu chấm, gạch đầu dòng
-        clean_line = re.sub(r'^[0-9\.\-\*\)\]]+\s*', '', line)
-        if clean_line and len(clean_line) > 10:
-            topics.append(clean_line)
+        if line and len(line) > 10:
+            # Xóa số và ký tự đầu dòng
+            clean_line = re.sub(r'^[0-9\.\-\*\)\]]+\s*', '', line)
+            if clean_line:
+                topics.append(clean_line)
     
-    # Nếu không parse được, tạo mặc định
-    if not topics:
-        topics = [
-            "Trí tuệ nhân tạo sẽ thay thế hay bổ trợ cho con người?",
-            "Công nghệ có đang làm con người cô đơn hơn?",
-            "Nên ưu tiên phát triển kinh tế hay bảo vệ môi trường?"
-        ]
-    
-    return topics[:3]
+    return topics[:3] if topics else [
+        "Trí tuệ nhân tạo sẽ thay thế hay bổ trợ cho con người?",
+        "Công nghệ có đang làm con người cô đơn hơn?",
+        "Nên ưu tiên phát triển kinh tế hay bảo vệ môi trường?"
+    ]
 
 # --- Debate Logic Functions ---
 def generate_opening_statements() -> Tuple[str, str, str]:
@@ -880,7 +908,7 @@ def render_home():
         # Model selection
         model_options = ["openai/gpt-4.1", "openai/gpt-4o-mini", "openai/gpt-3.5-turbo"]
         if st.session_state.config.api_client == "openai":
-            model_options = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-4o"]
+            model_options = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-4o", "gpt-4-vision-preview"]
         
         st.session_state.config.model = st.selectbox(
             "Model:",
@@ -921,98 +949,95 @@ def render_home():
         index=modes.index(st.session_state.config.mode) if st.session_state.config.mode in modes else 0
     )
     
-    # 2. Chủ đề tranh luận
+    # 2. Chủ đề tranh luận (tabs)
     st.subheader("2) Chủ đề tranh luận")
     
-    # Tạo tabs cho các cách tạo chủ đề
+    # Tạo 3 tabs riêng biệt
     tab1, tab2, tab3 = st.tabs(["📝 Nhập thủ công", "💡 Gợi ý chủ đề", "🖼️ Phân tích hình ảnh"])
     
+    # Tab 1: Nhập thủ công
     with tab1:
         st.session_state.config.topic = st.text_input(
-            "Nhập chủ đề tranh luận:",
+            "Nhập chủ đề tranh luận của bạn:",
             value=st.session_state.config.topic,
             placeholder="Ví dụ: Giai cấp thống trị và bị trị",
             key="manual_topic_input"
         )
     
+    # Tab 2: Gợi ý chủ đề từ văn bản
     with tab2:
-        st.write("Nhấn nút bên dưới để AI gợi ý chủ đề tranh luận:")
+        st.write("AI sẽ đề xuất chủ đề tranh luận thú vị:")
         
-        if st.button("🎲 Tạo chủ đề ngẫu nhiên", use_container_width=True):
-            with st.spinner("Đang tạo chủ đề..."):
+        if st.button("🎲 Tạo chủ đề ngẫu nhiên", use_container_width=True, key="suggest_text_topics"):
+            with st.spinner("AI đang tạo chủ đề..."):
                 topics = generate_text_topics()
                 st.session_state.suggested_topics = topics
-                st.rerun()  # FIX: Thêm rerun để hiển thị ngay lập tức
+                st.session_state.image_analysis_result = None  # Xóa kết quả phân tích ảnh
+                st.rerun()
         
-        if st.session_state.suggested_topics:
-            st.markdown("**Chủ đề gợi ý:**")
-            for idx, topic in enumerate(st.session_state.suggested_topics):
-                if st.button(f"{topic[:80]}", key=f"topic_btn_{idx}", use_container_width=True):
-                    st.session_state.config.topic = topic
-                    st.session_state.suggested_topics = None
-                    st.rerun()
+        if st.session_state.suggested_topics and not st.session_state.image_analysis_result:
+            st.markdown("**Chủ đề đề xuất:**")
+            for idx, topic in enumerate(st.session_state.suggested_topics, 1):
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.write(f"**{idx}. {topic}**")
+                with col2:
+                    if st.button("Chọn", key=f"select_text_topic_{idx}", use_container_width=True):
+                        st.session_state.config.topic = topic
+                        st.session_state.suggested_topics = None
+                        st.rerun()
     
+    # Tab 3: Phân tích hình ảnh
     with tab3:
         st.write("Tải lên hình ảnh để AI phân tích và đề xuất chủ đề:")
         
         uploaded_file = st.file_uploader(
-            "Chọn hình ảnh",
-            type=['png', 'jpg', 'jpeg', 'gif', 'bmp'],
+            "Chọn một hình ảnh...", 
+            type=["png", "jpg", "jpeg", "webp"],
             key="image_uploader"
         )
         
         if uploaded_file is not None:
-            # Hiển thị ảnh xem trước
             try:
                 image = Image.open(uploaded_file)
-                st.image(image, caption="Ảnh đã tải lên", use_column_width=True)
                 
-                col1, col2 = st.columns(2)
+                col1, col2 = st.columns([1, 2])
                 with col1:
-                    if st.button("🔍 Phân tích hình ảnh", use_container_width=True):
-                        with st.spinner("Đang phân tích hình ảnh..."):
-                            analysis_result = analyze_image_with_vision(image)
-                            st.session_state.image_analysis_result = analysis_result
-                            
-                            # Phân tích kết quả để lấy chủ đề
-                            lines = [line.strip() for line in analysis_result.split('\n') if line.strip()]
-                            topics = []
-                            for line in lines:
-                                # Loại bỏ số và dấu chấm đầu dòng
-                                clean_line = re.sub(r'^[0-9\.\-\*\)\]]+\s*', '', line)
-                                if clean_line and len(clean_line) > 10 and "chủ đề" not in clean_line.lower():
-                                    topics.append(clean_line)
-                            
-                            if topics:
-                                st.session_state.suggested_topics = topics[:3]
-                            else:
-                                # Nếu không parse được, dùng toàn bộ kết quả
-                                st.session_state.suggested_topics = [analysis_result[:150]]
-                            
-                            st.rerun()
+                    st.image(image, caption="Ảnh đã tải lên", width=200)
                 
                 with col2:
-                    if st.button("🗑️ Xóa ảnh", type="secondary", use_container_width=True):
-                        st.session_state.uploaded_image = None
-                        st.session_state.image_analysis_result = None
-                        st.rerun()
+                    st.write("**Thông tin ảnh:**")
+                    st.write(f"- Định dạng: {uploaded_file.type}")
+                    st.write(f"- Kích thước: {image.size[0]}x{image.size[1]} pixels")
+                
+                # Nút phân tích ảnh
+                if st.button("🔍 AI Phân tích ảnh", type="primary", use_container_width=True, key="analyze_image"):
+                    with st.spinner("🤖 AI đang phân tích hình ảnh..."):
+                        suggested_topics = analyze_image_for_topic(image)
+                        
+                        if suggested_topics:
+                            st.session_state.suggested_topics = suggested_topics
+                            st.session_state.image_analysis_result = "Đã phân tích xong"
+                            st.rerun()
+                
             except Exception as e:
-                st.error(f"Lỗi mở ảnh: {str(e)}")
+                st.error(f"Lỗi khi mở ảnh: {str(e)}")
         
-        if st.session_state.image_analysis_result:
-            st.markdown("**Kết quả phân tích:**")
-            st.info(st.session_state.image_analysis_result)
-            
-            if st.session_state.suggested_topics:
-                st.markdown("**Chủ đề đề xuất từ hình ảnh:**")
-                for idx, topic in enumerate(st.session_state.suggested_topics):
-                    if st.button(f"📸 {topic[:80]}", key=f"img_topic_btn_{idx}", use_container_width=True):
+        # Hiển thị kết quả phân tích ảnh
+        if st.session_state.suggested_topics and st.session_state.image_analysis_result:
+            st.markdown("**Chủ đề đề xuất từ hình ảnh:**")
+            for idx, topic in enumerate(st.session_state.suggested_topics, 1):
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.write(f"**{idx}. {topic}**")
+                with col2:
+                    if st.button("Chọn", key=f"select_img_topic_{idx}", use_container_width=True):
                         st.session_state.config.topic = topic
                         st.session_state.suggested_topics = None
                         st.session_state.image_analysis_result = None
                         st.rerun()
     
-    # Hiển thị chủ đề đang chọn (dùng chung cho cả 3 cách)
+    # Hiển thị chủ đề đang chọn (dùng chung cho cả 3 tabs)
     if st.session_state.config.topic:
         st.markdown(f"**Chủ đề đã chọn:** `{st.session_state.config.topic}`")
     
@@ -1094,29 +1119,29 @@ def render_debate():
     with st.sidebar:
         st.header("📊 Thông tin")
         
-        st.markdown(
-            """
-            <div style="
-                background-color: #1e2d42; 
-                padding: 15px; 
-                border-radius: 10px; 
-                border-left: 4px solid #58a6ff;
-                margin-bottom: 15px;
-            ">
-            """, 
-            unsafe_allow_html=True
-        )
-        
-        st.markdown(f"**Chế độ:** {config.mode}")
-        st.markdown(f"**Chủ đề:** {st.session_state.topic_used}")
-        st.markdown(f"**Phong cách:** {st.session_state.final_style}")
+        html_content = f"""
+        <div style="
+            background-color: #1e2d42; 
+            padding: 15px; 
+            border-radius: 10px; 
+            border-left: 4px solid #58a6ff;
+            margin-bottom: 15px;
+        ">
+            <p style="margin: 8px 0;"><strong>Chế độ:</strong> {config.mode}</p>
+            <p style="margin: 8px 0;"><strong>Chủ đề:</strong> {st.session_state.topic_used}</p>
+            <p style="margin: 8px 0;"><strong>Phong cách:</strong> {st.session_state.final_style}</p>
+        """
         
         if config.mode == "Chế độ RPG (Game Tranh luận)":
             rpg = st.session_state.rpg_state
-            st.markdown(f"**{config.persona_a}:** {rpg.hp_a} HP")
-            st.markdown(f"**{config.persona_b}:** {rpg.hp_b} HP")
+            html_content += f"""
+            <p style="margin: 8px 0;"><strong>{config.persona_a}:</strong> {rpg.hp_a} HP</p>
+            <p style="margin: 8px 0;"><strong>{config.persona_b}:</strong> {rpg.hp_b} HP</p>
+            """
         
-        st.markdown("</div>", unsafe_allow_html=True)
+        html_content += "</div>"
+        
+        st.markdown(html_content, unsafe_allow_html=True)
         
         st.markdown("---")
         
@@ -1345,6 +1370,26 @@ hr {
 /* Fix for sidebar spacing */
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
     gap: 10px !important;
+}
+
+/* Tabs styling */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 2px;
+}
+
+.stTabs [data-baseweb="tab"] {
+    height: 50px;
+    white-space: pre-wrap;
+    background-color: #1e2d42;
+    border-radius: 8px 8px 0 0;
+    gap: 1px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: #0d1117 !important;
+    border-bottom: 3px solid #58a6ff !important;
 }
 </style>
 """
