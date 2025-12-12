@@ -1002,28 +1002,36 @@ def render_debate():
     
     config = st.session_state.config
     
-    # Sidebar info - sửa lại để không có ô xanh dư thừa
+    # Sidebar info - SỬA LẠI: không dùng HTML phức tạp
     with st.sidebar:
         st.header("📊 Thông tin")
         
-        # Gộp tất cả vào một card duy nhất
-        info_html = f"""
-        <div style="background-color: #1e2d42; padding: 15px; border-radius: 10px; border-left: 4px solid #58a6ff;">
-            <p style="margin: 8px 0;"><strong>Chế độ:</strong> {config.mode}</p>
-            <p style="margin: 8px 0;"><strong>Chủ đề:</strong> {st.session_state.topic_used}</p>
-            <p style="margin: 8px 0;"><strong>Phong cách:</strong> {st.session_state.final_style}</p>
-        """
+        # Tạo một container với background và border
+        st.markdown(
+            """
+            <div style="
+                background-color: #1e2d42; 
+                padding: 15px; 
+                border-radius: 10px; 
+                border-left: 4px solid #58a6ff;
+                margin-bottom: 15px;
+            ">
+            """, 
+            unsafe_allow_html=True
+        )
+        
+        # Hiển thị thông tin bằng markdown đơn giản
+        st.markdown(f"**Chế độ:** {config.mode}")
+        st.markdown(f"**Chủ đề:** {st.session_state.topic_used}")
+        st.markdown(f"**Phong cách:** {st.session_state.final_style}")
         
         if config.mode == "Chế độ RPG (Game Tranh luận)":
             rpg = st.session_state.rpg_state
-            info_html += f"""
-            <p style="margin: 8px 0;"><strong>{config.persona_a}:</strong> {rpg.hp_a} HP</p>
-            <p style="margin: 8px 0;"><strong>{config.persona_b}:</strong> {rpg.hp_b} HP</p>
-            """
+            st.markdown(f"**{config.persona_a}:** {rpg.hp_a} HP")
+            st.markdown(f"**{config.persona_b}:** {rpg.hp_b} HP")
         
-        info_html += "</div>"
-        
-        st.markdown(info_html, unsafe_allow_html=True)
+        # Đóng thẻ div
+        st.markdown("</div>", unsafe_allow_html=True)
         
         st.markdown("---")
         
@@ -1151,7 +1159,7 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
 }
 
-/* Chat bubbles - Sửa phần trắng ở đầu */
+/* Chat bubbles */
 .chat-bubble {
     padding: 15px 20px;
     border-radius: 18px;
@@ -1165,7 +1173,6 @@ h1, h2, h3, h4, h5, h6 {
     position: relative;
 }
 
-/* Loại bỏ khoảng trắng thừa */
 .chat-container {
     display: flex;
     width: 100%;
@@ -1192,76 +1199,9 @@ h1, h2, h3, h4, h5, h6 {
     margin-top: 5px;
 }
 
-/* Sidebar info card - Sửa ô xanh không nội dung */
-.sidebar-card {
-    background-color: #1e2d42;
-    padding: 15px;
-    border-radius: 10px;
-    margin-bottom: 15px;
-    border-left: 4px solid #58a6ff;
-}
-
-.sidebar-card p {
-    margin: 8px 0;
-}
-
-/* HP bars */
-.hp-bar {
-    background-color: #1e2d42;
-    border-radius: 10px;
-    height: 30px;
-    overflow: hidden;
-    margin: 10px 0;
-    border: 2px solid;
-}
-
-.hp-fill {
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: bold;
-    font-size: 14px;
-}
-
-/* Control buttons */
-.control-button {
-    width: 100%;
+/* Sidebar styles */
+[data-testid="stSidebar"] .stMarkdown {
     margin: 5px 0;
-}
-
-/* Battle log */
-.battle-log {
-    margin-top: 15px;
-    padding-top: 15px;
-}
-
-/* Sửa khoảng cách giữa các phần tử */
-div[data-testid="stHorizontalBlock"] {
-    gap: 8px;
-    margin: 5px 0;
-}
-
-/* Sửa padding của các container */
-.main .block-container {
-    padding-top: 1rem;
-    padding-bottom: 1rem;
-}
-
-/* Text area */
-.stTextArea textarea {
-    border-radius: 10px;
-    border: 2px solid #30363d;
-    background-color: #0d1117;
-    color: #c9d1d9;
-    font-size: 15px;
-    padding: 12px;
-}
-
-.stTextArea textarea:focus {
-    border-color: #58a6ff;
-    box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
 }
 
 /* Button styles */
@@ -1327,7 +1267,7 @@ hr {
     margin: 20px 0;
 }
 
-/* Fix for extra spacing in containers */
+/* Fix spacing in containers */
 [data-testid="stVerticalBlock"] > div {
     padding: 0 !important;
 }
@@ -1335,12 +1275,6 @@ hr {
 /* Fix for sidebar spacing */
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
     gap: 10px !important;
-}
-
-/* Remove extra borders */
-[data-testid="stExpander"] {
-    border: none !important;
-    background-color: transparent !important;
 }
 </style>
 """
