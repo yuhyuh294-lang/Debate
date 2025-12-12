@@ -300,7 +300,7 @@ def generate_ai_reply(speaker: str, last_message: str = "") -> str:
     config = st.session_state.config
     
     if speaker == "A":
-        persona = config.persona_a
+        
         role = "Ủng hộ"
         opponent = config.persona_b
     else:  # speaker == "B"
@@ -1566,6 +1566,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
