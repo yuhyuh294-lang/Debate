@@ -62,6 +62,9 @@ class DebateState:
 # --- Khởi tạo Session State ---
 def init_session_state():
     """Khởi tạo tất cả session state variables"""
+    # Thêm vào phần init_session_state() hoặc đầu file
+    if "current_tab" not in st.session_state:
+        st.session_state.current_tab = "tab1"  # Mặc định là tab1
     if "config" not in st.session_state:
         st.session_state.config = DebateConfig()
     
@@ -115,7 +118,7 @@ def init_session_state():
     
     if "debate_finished" not in st.session_state:
         st.session_state.debate_finished = False
-
+    
 # Gọi khởi tạo
 init_session_state()
 
@@ -873,6 +876,7 @@ def run_courtroom_analysis():
 
 # --- Main Pages ---
 def render_home():
+    st.markdown(TAB_STYLE, unsafe_allow_html=True)
     """Trang chủ thiết lập"""
     st.title("🤖 AI Debate Bot – Thiết lập tranh luận")
     
@@ -1400,6 +1404,46 @@ hr {
     font-size: 18px;
     font-weight: bold;
 }
+/* Hiệu ứng chuyển tab mượt mà */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 2px;
+    background-color: #0d1117;
+    padding: 5px;
+}
+
+.stTabs [data-baseweb="tab"] {
+    background-color: #1e2d42;
+    border-radius: 8px 8px 0 0;
+    padding: 12px 24px;
+    font-weight: 600;
+    transition: all 0.3s;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+    background-color: #2a3f5f;
+}
+
+.stTabs [aria-selected="true"] {
+    background-color: #0d1117 !important;
+    border-bottom: 3px solid #58a6ff !important;
+}
+
+/* Chủ đề đã chọn */
+.selected-topic-box {
+    background-color: #1f362d;
+    padding: 15px;
+    border-radius: 10px;
+    border-left: 5px solid #4cd964;
+    margin: 15px 0;
+    font-size: 16px;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+
+.selected-topic-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
 </style>
 """
 
@@ -1426,4 +1470,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
