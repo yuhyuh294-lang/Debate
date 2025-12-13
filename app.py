@@ -119,6 +119,9 @@ def init_session_state():
     
     if "debate_finished" not in st.session_state:
         st.session_state.debate_finished = False
+    if "_trigger_continue" not in st.session_state:
+        st.session_state._trigger_continue = False
+
     
 # Gọi khởi tạo
 init_session_state()
@@ -602,7 +605,6 @@ def render_control_buttons():
     """Hiển thị các nút điều khiển"""
     config = st.session_state.config
     debate_state = st.session_state.get('debate_state', DebateState())
-    
     if not hasattr(debate_state, 'waiting_for_user'):
         debate_state.waiting_for_user = False
     
@@ -617,6 +619,7 @@ def render_control_buttons():
                 else:
                     with st.spinner("Đang thêm lượt tranh luận..."):
                         add_ai_turn_auto()
+                        st.session_state.debate_state.current_display_index += 1
                         
                         is_victory, victory_msg = check_victory()
                         if is_victory:
@@ -846,9 +849,11 @@ def render_chat_messages():
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-    if st.button("Tiếp tục"):
-        st.session_state.debate_state.current_display_index += 1
+    if st.button("▶️ Tiếp tục", key="continue_bottom"):
+        st.session_state._trigger_continue = True
         st.rerun()
+
+
 
     # ===== Animation (GIỮ NGUYÊN HÀNH VI CŨ) =====
 
@@ -1594,9 +1599,22 @@ def main():
         render_home()
     else:
         render_debate()
+    if st.session_state.get("_trigger_continue", False):
+        st.session_state._trigger_continue = False
+
+        add_ai_turn_auto()
+        st.session_state.debate_state.current_display_index += 1
+
+        is_victory, _ = check_victory()
+        if is_victory:
+            st.session_state.debate_finished = True
+            st.session_state.debate_running = False
+
+        st.rerun()
 
 if __name__ == "__main__":
     main()
+
 
 
 
