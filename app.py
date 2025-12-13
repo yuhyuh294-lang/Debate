@@ -293,8 +293,8 @@ def generate_opening_statements() -> Tuple[str, str, str]:
     b_match = re.search(r'B[:\-]?\s*(.*?)(?:\n\n|\nC|$)', response, re.DOTALL | re.IGNORECASE)
     c_match = re.search(r'C[:\-]?\s*(.*?)(?:\n\n|$)', response, re.DOTALL | re.IGNORECASE)
     
-    a_opening = a_match.group(1).strip() if a_match else "Xin chào, tôi ủng hộ chủ đề này."
-    b_opening = b_match.group(1).strip() if b_match else "Tôi phản đối chủ đề này."
+    a_opening = strip_persona_prefix(a_match.group(1).strip()) if a_match else "Xin chào, tôi ủng hộ chủ đề này."
+    b_opening = strip_persona_prefix(b_match.group(1).strip()) if b_match else "Tôi phản đối chủ đề này."
     c_opening = c_match.group(1).strip() if c_match and config.mode == "Tham gia 3 bên (Thành viên C)" else ""
     
     return a_opening, b_opening, c_opening
@@ -442,14 +442,15 @@ def initialize_debate():
     
     with st.spinner("Đang khởi tạo cuộc tranh luận..."):
         a_open, b_open, c_open = generate_opening_statements()
-        st.session_state.dialog_a.append(a_open)
+        st.session_state.dialog_a.append(strip_persona_prefix(a_open))
+
         
         if config.mode == "Tranh luận 1v1 với AI":
             st.session_state.debate_state.waiting_for_user = True
             st.session_state.debate_state.current_turn = "USER_B"
             
         elif config.mode == "Tham gia 3 bên (Thành viên C)":
-            st.session_state.dialog_b.append(b_open)
+            st.session_state.dialog_b.append(strip_persona_prefix(b_open))
             st.session_state.debate_state.waiting_for_user = True
             st.session_state.debate_state.current_turn = "USER_C"
             
@@ -1594,29 +1595,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
