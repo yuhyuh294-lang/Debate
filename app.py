@@ -845,10 +845,6 @@ def render_chat_messages():
                 """, unsafe_allow_html=True)
 
     # ===== Animation (GIỮ NGUYÊN HÀNH VI CŨ) =====
-    if not debate_state.is_fast_mode and debate_state.current_display_index < max_rounds - 1:
-        debate_state.current_display_index += 1
-        time.sleep(0.3)
-        st.rerun()
 
 def run_courtroom_analysis():
     """Chạy phân tích phiên tòa AI"""
@@ -1595,6 +1591,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
