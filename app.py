@@ -843,6 +843,9 @@ def render_chat_messages():
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+    if st.button("Tiếp tục"):
+    st.session_state.debate_state.current_display_index += 1
+    st.rerun()
 
     # ===== Animation (GIỮ NGUYÊN HÀNH VI CŨ) =====
 
@@ -1591,6 +1594,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
