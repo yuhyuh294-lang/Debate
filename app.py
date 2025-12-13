@@ -439,10 +439,13 @@ def get_advantage_status() -> str:
 def initialize_debate():
     """Khởi tạo cuộc tranh luận"""
     config = st.session_state.config
-    
+    st.session_state.debate_state.current_display_index = 1
     with st.spinner("Đang khởi tạo cuộc tranh luận..."):
-        a_open, b_open, c_open = generate_opening_statements()
+        a_open = generate_ai_reply("A", "")
+        b_open = generate_ai_reply("B", a_open)
+
         st.session_state.dialog_a.append(strip_persona_prefix(a_open))
+        st.session_state.dialog_b.append(strip_persona_prefix(b_open))
 
         
         if config.mode == "Tranh luận 1v1 với AI":
@@ -784,7 +787,7 @@ def render_chat_messages():
     if debate_state.is_fast_mode:
         display_rounds = max_rounds
     else:
-        display_rounds = min(debate_state.current_display_index + 1, max_rounds)
+        display_rounds = min(debate_state.current_display_index, max_rounds)
 
     for i in range(display_rounds):
 
@@ -1594,6 +1597,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
