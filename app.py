@@ -1582,7 +1582,6 @@ div[data-baseweb="slider"] {
 """
 
 # --- Main App ---
-giờ xử lý vấn đề 2 thôi, tôi bỏ cái giọng nói
 def main():
     """Hàm chính điều hướng ứng dụng"""
 
@@ -1623,6 +1622,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
