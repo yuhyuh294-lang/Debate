@@ -121,9 +121,6 @@ def init_session_state():
         st.session_state.debate_finished = False
     if "_trigger_continue" not in st.session_state:
         st.session_state._trigger_continue = False
-    if "dialog_user_b" not in st.session_state:
-        st.session_state.dialog_user_b = []
-
 
     
 # Gọi khởi tạo
@@ -480,71 +477,71 @@ def initialize_debate():
         st.rerun()
 
 def add_ai_turn_auto():
-    """Sinh lượt AI (AI vs AI / RPG)"""
+    """1 lượt = A + B"""
     config = st.session_state.config
-    debate_state = st.session_state.debate_state
 
-    # ===== A trả lời =====
     last_b = st.session_state.dialog_b[-1] if st.session_state.dialog_b else ""
     reply_a = generate_ai_reply("A", last_b)
     st.session_state.dialog_a.append(reply_a)
 
-    # ===== B trả lời =====
-    reply_b = generate_ai_reply("B", reply_a)
+    if config.mode == "Chế độ RPG (Game Tranh luận)" and last_b:
+        apply_rpg_damage("A", "B", reply_a)
+
+    last_a = reply_a
+    reply_b = generate_ai_reply("B", last_a)
     st.session_state.dialog_b.append(reply_b)
 
-    # ===== RPG DAMAGE =====
     if config.mode == "Chế độ RPG (Game Tranh luận)":
-        apply_rpg_damage("A", "B", reply_a)
         apply_rpg_damage("B", "A", reply_b)
 
-    debate_state.turn_count += 1
+    st.session_state.debate_state.turn_count += 1
+
 def process_user_reply(user_role: str, message: str):
     """Xử lý phản hồi của người dùng"""
     config = st.session_state.config
-    debate_state = st.session_state.debate_state
-
-    # =========================================================
-    # =============== MODE 1v1: USER vs AI ====================
-    # =========================================================
+    
     if user_role == "USER_B":
-        # 1️⃣ HIỂN THỊ NGAY MESSAGE CỦA USER
         st.session_state.dialog_b.append(message)
         st.session_state.user_input_b = ""
-
-        # 2️⃣ RPG (NẾU CÓ)
+        st.session_state.debate_state.waiting_for_user = False
+        st.session_state.debate_state.current_turn = "A"
+        
         if config.mode == "Chế độ RPG (Game Tranh luận)":
             apply_rpg_damage("B", "A", message)
-
-        # 3️⃣ KHÓA INPUT – CHỜ AI
-        debate_state.waiting_for_user = False
-        debate_state.current_turn = "A"
-
-        return  # ⛔ CỰC KỲ QUAN TRỌNG (KHÔNG CHO CHẠY TIẾP)
-
-
-    # =========================================================
-    # =============== MODE USER C (GIỮ NGUYÊN) =================
-    # =========================================================
+        
+        if len(st.session_state.dialog_a) < config.rounds:
+            with st.spinner(f"{config.persona_a} đang trả lời..."):
+                last_b = message
+                reply_a = generate_ai_reply("A", last_b)
+                st.session_state.dialog_a.append(reply_a)
+                
+                if config.mode == "Chế độ RPG (Game Tranh luận)":
+                    apply_rpg_damage("A", "B", reply_a)
+                
+                st.session_state.debate_state.waiting_for_user = True
+                st.session_state.debate_state.current_turn = "USER_B"
+    
     elif user_role == "USER_C":
         st.session_state.dialog_c.append(message)
         st.session_state.user_input_c = ""
-        debate_state.waiting_for_user = False
-
+        st.session_state.debate_state.waiting_for_user = False
+        
         if len(st.session_state.dialog_a) < config.rounds:
             with st.spinner(f"{config.persona_a} và {config.persona_b} đang tranh luận..."):
                 reply_a = generate_ai_reply("A", message)
                 st.session_state.dialog_a.append(reply_a)
-
+                
                 reply_b = generate_ai_reply("B", reply_a)
                 st.session_state.dialog_b.append(reply_b)
-
+                
                 if config.mode == "Chế độ RPG (Game Tranh luận)":
                     apply_rpg_damage("A", "B", reply_a)
                     apply_rpg_damage("B", "A", reply_b)
+                
+                st.session_state.debate_state.waiting_for_user = True
+                st.session_state.debate_state.current_turn = "USER_C"
 
-                debate_state.waiting_for_user = True
-                debate_state.current_turn = "USER_C"
+# --- UI Components ---
 def render_hp_display():
     """Hiển thị thanh HP và nhật ký"""
     config = st.session_state.config
@@ -775,7 +772,7 @@ def render_chat_messages():
     dialog_b = st.session_state.dialog_b
     dialog_c = st.session_state.dialog_c
 
-    # A mở lượt → số vòng hợp lệ
+    # A là người mở lượt → số vòng hợp lệ
     max_rounds = min(len(dialog_a), len(dialog_b))
 
     if debate_state.is_fast_mode:
@@ -787,35 +784,39 @@ def render_chat_messages():
 
         # ===== A =====
         if i < len(dialog_a):
-            msg_a = strip_persona_prefix(dialog_a[i])
+            msg_a = strip_persona_prefix(st.session_state.dialog_a[i])
             if msg_a:
                 st.markdown(f"""
-                <div style="display:flex;width:100%;margin:5px 0;">
-                    <div style="padding:15px 20px;border-radius:18px;
-                        max-width:75%;background:linear-gradient(135deg,#1f362d,#2a4a3d);
-                        color:#e0f7e9;margin-right:auto;border:1px solid #2a4a3d;">
-                        <b style="color:#4cd964;">A{i+1} ({config.persona_a})</b><br>
-                        {msg_a}
+                <div style="display: flex; width: 100%; margin: 5px 0; padding: 0;">
+                    <div style="padding: 15px 20px; border-radius: 18px; margin: 8px 0; max-width: 75%; word-wrap: break-word; font-size: 15px; line-height: 1.6; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: transform 0.2s ease; position: relative; background: linear-gradient(135deg, #1f362d 0%, #2a4a3d 100%); color: #e0f7e9 !important; margin-right: auto; border-top-left-radius: 4px; border: 1px solid #2a4a3d;">
+                        <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                            <span style="font-weight: bold; font-size: 14px; letter-spacing: 0.5px; display: block; color: #4cd964 !important;">A{i+1} ({config.persona_a})</span>
+                        </div>
+                        <div style="font-size: 15px; line-height: 1.7; margin-top: 5px;">
+                            {msg_a}
+                        </div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
-        # ===== B =====
+        # ===== B (chỉ render nếu A cùng lượt tồn tại) =====
         if i < len(dialog_b) and i < len(dialog_a):
-            msg_b = strip_persona_prefix(dialog_b[i])
+            msg_b = strip_persona_prefix(st.session_state.dialog_b[i])
             if msg_b:
                 st.markdown(f"""
-                <div style="display:flex;width:100%;justify-content:flex-end;margin:5px 0;">
-                    <div style="padding:15px 20px;border-radius:18px;
-                        max-width:75%;background:linear-gradient(135deg,#3b2225,#4d2c30);
-                        color:#ffe5d9;border:1px solid #4d2c30;">
-                        <b style="color:#ff9500;">B{i+1} ({config.persona_b})</b><br>
-                        {msg_b}
+                <div style="display: flex; width: 100%; margin: 5px 0; padding: 0; justify-content: flex-end;">
+                    <div style="padding: 15px 20px; border-radius: 18px; margin: 8px 0; max-width: 75%; word-wrap: break-word; font-size: 15px; line-height: 1.6; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: transform 0.2s ease; position: relative; background: linear-gradient(135deg, #3b2225 0%, #4d2c30 100%); color: #ffe5d9 !important; margin-left: auto; border-top-right-radius: 4px; border: 1px solid #4d2c30;">
+                        <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                            <span style="font-weight: bold; font-size: 14px; letter-spacing: 0.5px; display: block; color: #ff9500 !important;">B{i+1} ({config.persona_b})</span>
+                        </div>
+                        <div style="font-size: 15px; line-height: 1.7; margin-top: 5px;">
+                            {msg_b}
+                        </div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
-        # ===== C =====
+        # ===== C (chỉ render nếu A & B đã có) =====
         if (
             config.mode == "Tham gia 3 bên (Thành viên C)"
             and i < len(dialog_c)
@@ -825,19 +826,25 @@ def render_chat_messages():
             msg_c = dialog_c[i]
             if msg_c:
                 st.markdown(f"""
-                <div style="display:flex;justify-content:center;margin:6px 0;">
-                    <div style="padding:15px 20px;border-radius:18px;
-                        max-width:85%;background:linear-gradient(135deg,#192f44,#2a3f5f);
-                        color:#d6e4ff;border:1px solid #2a3f5f;">
-                        <b style="color:#8bb8e8;">C{i+1} ({config.persona_c})</b><br>
-                        {msg_c}
+                <div style="display: flex; width: 100%; margin: 5px 0; padding: 0; justify-content: center;">
+                    <div style="padding: 15px 20px; border-radius: 18px; margin: 8px 0; max-width: 85%; word-wrap: break-word; font-size: 15px; line-height: 1.6; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: transform 0.2s ease; position: relative; background: linear-gradient(135deg, #192f44 0%, #2a3f5f 100%); color: #d6e4ff !important; margin: 15px auto; border-radius: 18px; border: 1px solid #2a3f5f;">
+                        <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                            <span style="font-weight: bold; font-size: 14px; letter-spacing: 0.5px; display: block; color: #8bb8e8 !important;">C{i+1} ({config.persona_c})</span>
+                        </div>
+                        <div style="font-size: 15px; line-height: 1.7; margin-top: 5px;">
+                            {msg_c}
+                        </div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-
     if st.button("▶️ Tiếp tục", key="continue_bottom"):
         st.session_state._trigger_continue = True
         st.rerun()
+
+
+
+    # ===== Animation (GIỮ NGUYÊN HÀNH VI CŨ) =====
+
 def run_courtroom_analysis():
     """Chạy phân tích phiên tòa AI"""
     config = st.session_state.config
@@ -1296,6 +1303,7 @@ def render_debate():
             
             with st.container():
                 st.markdown(st.session_state.courtroom_analysis)
+
 # --- CSS Style ---
 CHAT_STYLE = """
 <style>
@@ -1566,14 +1574,20 @@ def main():
     if st.session_state.get("_trigger_continue", False):
         st.session_state._trigger_continue = False
 
-        add_ai_turn_auto()
-        st.session_state.debate_state.current_display_index += 1
+        config = st.session_state.config
+        debate_state = st.session_state.debate_state
 
-        is_victory, _ = check_victory()
-        if is_victory:
-            st.session_state.debate_finished = True
-            st.session_state.debate_running = False
+        # ❗ CHỈ AUTO AI KHI LÀ AI vs AI
+        if config.mode in ["Tranh luận 2 AI (Tiêu chuẩn)", "Chế độ RPG (Game Tranh luận)"]:
+            add_ai_turn_auto()
+            debate_state.current_display_index += 1
 
+            is_victory, _ = check_victory()
+            if is_victory:
+                st.session_state.debate_finished = True
+                st.session_state.debate_running = False
+
+        # ❗ MODE 1v1: KHÔNG GỌI AI, CHỈ HIỆN UI
         st.rerun()
 
     # ===== CONFIG PAGE =====
@@ -1597,21 +1611,6 @@ def main():
     else:
         render_debate()
 
+
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
