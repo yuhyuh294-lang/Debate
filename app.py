@@ -121,6 +121,9 @@ def init_session_state():
         st.session_state.debate_finished = False
     if "_trigger_continue" not in st.session_state:
         st.session_state._trigger_continue = False
+    if "dialog_user_b" not in st.session_state:
+        st.session_state.dialog_user_b = []
+
 
     
 # Gọi khởi tạo
@@ -477,18 +480,20 @@ def initialize_debate():
         st.rerun()
 
 def add_ai_turn_auto():
-    """1 lượt = A + B"""
     config = st.session_state.config
 
-    last_b = st.session_state.dialog_b[-1] if st.session_state.dialog_b else ""
-    reply_a = generate_ai_reply("A", last_b)
+    if not st.session_state.dialog_user_b:
+        return
+
+    last_user = st.session_state.dialog_user_b[-1]
+
+    reply_a = generate_ai_reply("A", last_user)
     st.session_state.dialog_a.append(reply_a)
 
-    if config.mode == "Chế độ RPG (Game Tranh luận)" and last_b:
+    if config.mode == "Chế độ RPG (Game Tranh luận)":
         apply_rpg_damage("A", "B", reply_a)
 
-    last_a = reply_a
-    reply_b = generate_ai_reply("B", last_a)
+    reply_b = generate_ai_reply("B", reply_a)
     st.session_state.dialog_b.append(reply_b)
 
     if config.mode == "Chế độ RPG (Game Tranh luận)":
@@ -506,7 +511,7 @@ def process_user_reply(user_role: str, message: str):
     # =========================================================
     if user_role == "USER_B":
         # 1️⃣ LƯU NỘI DUNG USER
-        st.session_state.dialog_b.append(message)
+        st.session_state.dialog_user_b.append(message)
         st.session_state.user_input_b = ""
 
         # 2️⃣ ÁP DỤNG RPG (NẾU CÓ)
@@ -768,16 +773,17 @@ def render_user_input():
                 st.session_state.user_input_c = ""
                 st.rerun()
 def render_chat_messages():
-    """Hiển thị các tin nhắn trong chat (FIX THỨ TỰ – GIỮ NGUYÊN STYLE)"""
+    """Hiển thị các tin nhắn trong chat (A → USER → B → C)"""
     config = st.session_state.config
     debate_state = st.session_state.get('debate_state', DebateState())
 
     dialog_a = st.session_state.dialog_a
     dialog_b = st.session_state.dialog_b
     dialog_c = st.session_state.dialog_c
+    dialog_user_b = st.session_state.get("dialog_user_b", [])
 
-    # A là người mở lượt → số vòng hợp lệ
-    max_rounds = min(len(dialog_a), len(dialog_b))
+    # số vòng = theo số lần USER trả lời
+    max_rounds = len(dialog_user_b)
 
     if debate_state.is_fast_mode:
         display_rounds = max_rounds
@@ -788,65 +794,63 @@ def render_chat_messages():
 
         # ===== A =====
         if i < len(dialog_a):
-            msg_a = strip_persona_prefix(st.session_state.dialog_a[i])
+            msg_a = strip_persona_prefix(dialog_a[i])
             if msg_a:
                 st.markdown(f"""
-                <div style="display: flex; width: 100%; margin: 5px 0; padding: 0;">
-                    <div style="padding: 15px 20px; border-radius: 18px; margin: 8px 0; max-width: 75%; word-wrap: break-word; font-size: 15px; line-height: 1.6; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: transform 0.2s ease; position: relative; background: linear-gradient(135deg, #1f362d 0%, #2a4a3d 100%); color: #e0f7e9 !important; margin-right: auto; border-top-left-radius: 4px; border: 1px solid #2a4a3d;">
-                        <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
-                            <span style="font-weight: bold; font-size: 14px; letter-spacing: 0.5px; display: block; color: #4cd964 !important;">A{i+1} ({config.persona_a})</span>
-                        </div>
-                        <div style="font-size: 15px; line-height: 1.7; margin-top: 5px;">
-                            {msg_a}
-                        </div>
+                <div style="display:flex;width:100%;margin:5px 0;">
+                    <div style="padding:15px 20px;border-radius:18px;
+                        max-width:75%;background:linear-gradient(135deg,#1f362d,#2a4a3d);
+                        color:#e0f7e9;margin-right:auto;border:1px solid #2a4a3d;">
+                        <b style="color:#4cd964;">A{i+1} ({config.persona_a})</b><br>
+                        {msg_a}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
-        # ===== B (chỉ render nếu A cùng lượt tồn tại) =====
-        if i < len(dialog_b) and i < len(dialog_a):
-            msg_b = strip_persona_prefix(st.session_state.dialog_b[i])
+        # ===== USER =====
+        if i < len(dialog_user_b):
+            user_msg = dialog_user_b[i]
+            st.markdown(f"""
+            <div style="display:flex;width:100%;justify-content:flex-end;margin:5px 0;">
+                <div style="padding:14px 18px;border-radius:18px;
+                    max-width:70%;background:#2563eb;color:white;">
+                    <b>Bạn:</b><br>
+                    {user_msg}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ===== B (AI) =====
+        if i < len(dialog_b):
+            msg_b = strip_persona_prefix(dialog_b[i])
             if msg_b:
                 st.markdown(f"""
-                <div style="display: flex; width: 100%; margin: 5px 0; padding: 0; justify-content: flex-end;">
-                    <div style="padding: 15px 20px; border-radius: 18px; margin: 8px 0; max-width: 75%; word-wrap: break-word; font-size: 15px; line-height: 1.6; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: transform 0.2s ease; position: relative; background: linear-gradient(135deg, #3b2225 0%, #4d2c30 100%); color: #ffe5d9 !important; margin-left: auto; border-top-right-radius: 4px; border: 1px solid #4d2c30;">
-                        <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
-                            <span style="font-weight: bold; font-size: 14px; letter-spacing: 0.5px; display: block; color: #ff9500 !important;">B{i+1} ({config.persona_b})</span>
-                        </div>
-                        <div style="font-size: 15px; line-height: 1.7; margin-top: 5px;">
-                            {msg_b}
-                        </div>
+                <div style="display:flex;width:100%;justify-content:flex-end;margin:5px 0;">
+                    <div style="padding:15px 20px;border-radius:18px;
+                        max-width:75%;background:linear-gradient(135deg,#3b2225,#4d2c30);
+                        color:#ffe5d9;border:1px solid #4d2c30;">
+                        <b style="color:#ff9500;">B{i+1} ({config.persona_b})</b><br>
+                        {msg_b}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
-        # ===== C (chỉ render nếu A & B đã có) =====
+        # ===== C =====
         if (
             config.mode == "Tham gia 3 bên (Thành viên C)"
             and i < len(dialog_c)
-            and i < len(dialog_a)
-            and i < len(dialog_b)
         ):
             msg_c = dialog_c[i]
-            if msg_c:
-                st.markdown(f"""
-                <div style="display: flex; width: 100%; margin: 5px 0; padding: 0; justify-content: center;">
-                    <div style="padding: 15px 20px; border-radius: 18px; margin: 8px 0; max-width: 85%; word-wrap: break-word; font-size: 15px; line-height: 1.6; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); transition: transform 0.2s ease; position: relative; background: linear-gradient(135deg, #192f44 0%, #2a3f5f 100%); color: #d6e4ff !important; margin: 15px auto; border-radius: 18px; border: 1px solid #2a3f5f;">
-                        <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
-                            <span style="font-weight: bold; font-size: 14px; letter-spacing: 0.5px; display: block; color: #8bb8e8 !important;">C{i+1} ({config.persona_c})</span>
-                        </div>
-                        <div style="font-size: 15px; line-height: 1.7; margin-top: 5px;">
-                            {msg_c}
-                        </div>
-                    </div>
+            st.markdown(f"""
+            <div style="display:flex;justify-content:center;margin:6px 0;">
+                <div style="padding:15px 20px;border-radius:18px;
+                    max-width:85%;background:linear-gradient(135deg,#192f44,#2a3f5f);
+                    color:#d6e4ff;border:1px solid #2a3f5f;">
+                    <b style="color:#8bb8e8;">C{i+1} ({config.persona_c})</b><br>
+                    {msg_c}
                 </div>
-                """, unsafe_allow_html=True)
-    if st.button("▶️ Tiếp tục", key="continue_bottom"):
-        st.session_state._trigger_continue = True
-        st.rerun()
-
-
-
+            </div>
+            """, unsafe_allow_html=True)
     # ===== Animation (GIỮ NGUYÊN HÀNH VI CŨ) =====
 
 def run_courtroom_analysis():
@@ -1618,6 +1622,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
