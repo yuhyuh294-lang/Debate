@@ -477,71 +477,56 @@ def initialize_debate():
         st.rerun()
 
 def add_ai_turn_auto():
-    """1 lượt = A + B"""
+    """Sinh 1 lượt AI: A -> B (AI vs AI / RPG)"""
     config = st.session_state.config
+    debate_state = st.session_state.debate_state
 
+    # ===== LẤY INPUT CHO A =====
     last_b = st.session_state.dialog_b[-1] if st.session_state.dialog_b else ""
+
+    # ===== A =====
     reply_a = generate_ai_reply("A", last_b)
     st.session_state.dialog_a.append(reply_a)
 
     if config.mode == "Chế độ RPG (Game Tranh luận)" and last_b:
         apply_rpg_damage("A", "B", reply_a)
 
-    last_a = reply_a
-    reply_b = generate_ai_reply("B", last_a)
+    # ===== B (CHỈ DÙNG A VỪA SINH) =====
+    reply_b = generate_ai_reply("B", reply_a)
     st.session_state.dialog_b.append(reply_b)
 
     if config.mode == "Chế độ RPG (Game Tranh luận)":
         apply_rpg_damage("B", "A", reply_b)
 
-    st.session_state.debate_state.turn_count += 1
+    debate_state.turn_count += 1
 
 def process_user_reply(user_role: str, message: str):
-    """Xử lý phản hồi của người dùng"""
     config = st.session_state.config
-    
-    if user_role == "USER_B":
+    debate_state = st.session_state.debate_state
+
+    # =========================================================
+    # ================== 1v1 USER vs AI ======================
+    # =========================================================
+    if config.mode == "1v1 USER vs AI" and user_role == "USER_B":
+
+        # 1️⃣ LƯU USER (DÙNG dialog_b – KHÔNG TẠO LIST MỚI)
         st.session_state.dialog_b.append(message)
         st.session_state.user_input_b = ""
-        st.session_state.debate_state.waiting_for_user = False
-        st.session_state.debate_state.current_turn = "A"
-        
-        if config.mode == "Chế độ RPG (Game Tranh luận)":
-            apply_rpg_damage("B", "A", message)
-        
-        if len(st.session_state.dialog_a) < config.rounds:
-            with st.spinner(f"{config.persona_a} đang trả lời..."):
-                last_b = message
-                reply_a = generate_ai_reply("A", last_b)
-                st.session_state.dialog_a.append(reply_a)
-                
-                if config.mode == "Chế độ RPG (Game Tranh luận)":
-                    apply_rpg_damage("A", "B", reply_a)
-                
-                st.session_state.debate_state.waiting_for_user = True
-                st.session_state.debate_state.current_turn = "USER_B"
-    
-    elif user_role == "USER_C":
-        st.session_state.dialog_c.append(message)
-        st.session_state.user_input_c = ""
-        st.session_state.debate_state.waiting_for_user = False
-        
-        if len(st.session_state.dialog_a) < config.rounds:
-            with st.spinner(f"{config.persona_a} và {config.persona_b} đang tranh luận..."):
-                reply_a = generate_ai_reply("A", message)
-                st.session_state.dialog_a.append(reply_a)
-                
-                reply_b = generate_ai_reply("B", reply_a)
-                st.session_state.dialog_b.append(reply_b)
-                
-                if config.mode == "Chế độ RPG (Game Tranh luận)":
-                    apply_rpg_damage("A", "B", reply_a)
-                    apply_rpg_damage("B", "A", reply_b)
-                
-                st.session_state.debate_state.waiting_for_user = True
-                st.session_state.debate_state.current_turn = "USER_C"
 
-# --- UI Components ---
+        # 2️⃣ AI TRẢ LỜI NGAY
+        reply_a = generate_ai_reply("A", message)
+        st.session_state.dialog_a.append(reply_a)
+
+        # 3️⃣ RPG (NẾU CÓ)
+        if config.mode == "Chế độ RPG (Game Tranh luận)":
+            apply_rpg_damage("A", "B", reply_a)
+
+        # 4️⃣ CẬP NHẬT STATE
+        debate_state.waiting_for_user = True
+        debate_state.current_turn = "USER_B"
+        debate_state.turn_count += 1
+
+        return  # ⛔ KHÔNG CHẠY LOGIC KHÁC
 def render_hp_display():
     """Hiển thị thanh HP và nhật ký"""
     config = st.session_state.config
@@ -1605,3 +1590,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
