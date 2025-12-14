@@ -444,13 +444,19 @@ def initialize_debate():
     config = st.session_state.config
     st.session_state.debate_state.current_display_index = 1
     with st.spinner("Đang khởi tạo cuộc tranh luận..."):
+        # Chỉ tạo lời mở đầu cho A, B sẽ do người dùng nhập trong 1v1
         a_open = generate_ai_reply("A", "")
-        b_open = generate_ai_reply("B", a_open)
+        
+        # THÊM: Trong chế độ 1v1, KHÔNG tạo b_open
+        if config.mode != "Tranh luận 1v1 với AI":
+            b_open = generate_ai_reply("B", a_open)
+            st.session_state.dialog_b.append(strip_persona_prefix(b_open))
+        else:
+            # 1v1: chỉ tạo A1, B1 sẽ do người dùng nhập
+            pass
 
         st.session_state.dialog_a.append(strip_persona_prefix(a_open))
-        st.session_state.dialog_b.append(strip_persona_prefix(b_open))
 
-        
         if config.mode == "Tranh luận 1v1 với AI":
             st.session_state.debate_state.waiting_for_user = True
             st.session_state.debate_state.current_turn = "USER_B"
@@ -465,13 +471,14 @@ def initialize_debate():
                 apply_rpg_damage("B", "A", b_open)
                 
         else:
-            
             st.session_state.debate_state.current_turn = "B"
             st.session_state.debate_state.waiting_for_user = False
             
+            # RPG damage
             if config.mode == "Chế độ RPG (Game Tranh luận)":
                 apply_rpg_damage("A", "B", a_open)
-                apply_rpg_damage("B", "A", b_open)
+                if config.mode != "Tranh luận 1v1 với AI":  # CHỈ áp dụng nếu có b_open
+                    apply_rpg_damage("B", "A", b_open)
         
         st.session_state.debate_started = True
         st.rerun()
@@ -501,32 +508,40 @@ def add_ai_turn_auto():
     debate_state.turn_count += 1
 
 def process_user_reply(user_role: str, message: str):
+    """Xử lý phản hồi của người dùng"""
     config = st.session_state.config
-    debate_state = st.session_state.debate_state
-
-    # =========================================================
+    debate_state = st.session_state.get('debate_state', DebateState())
+    
     # ================== 1v1 USER vs AI ======================
-    # =========================================================
-    if config.mode == "1v1 USER vs AI" and user_role == "USER_B":
-
-        # 1️⃣ LƯU USER (DÙNG dialog_b – KHÔNG TẠO LIST MỚI)
-        st.session_state.dialog_b.append(message)
-        st.session_state.user_input_b = ""
-
-        # 2️⃣ AI TRẢ LỜI NGAY
-        reply_a = generate_ai_reply("A", message)
+    if config.mode == "Tranh luận 1v1 với AI" and user_role == "USER_B":
+        if not message or not message.strip():
+            st.warning("Vui lòng nhập nội dung!")
+            return
+            
+        # 1️⃣ LƯU phản hồi của người dùng vào dialog_b
+        st.session_state.dialog_b.append(message.strip())
+        st.session_state.user_input_b = ""  # Reset input
+        
+        # 2️⃣ AI (Bên A) trả lời ngay
+        reply_a = generate_ai_reply("A", message.strip())
         st.session_state.dialog_a.append(reply_a)
-
-        # 3️⃣ RPG (NẾU CÓ)
-        if config.mode == "Chế độ RPG (Game Tranh luận)":
-            apply_rpg_damage("A", "B", reply_a)
-
-        # 4️⃣ CẬP NHẬT STATE
+        
+        # 3️⃣ Cập nhật state - vẫn chờ người dùng tiếp theo
         debate_state.waiting_for_user = True
         debate_state.current_turn = "USER_B"
         debate_state.turn_count += 1
-
-        return  # ⛔ KHÔNG CHẠY LOGIC KHÁC
+        
+        # 4️⃣ RPG damage (nếu có)
+        if config.mode == "Chế độ RPG (Game Tranh luận)":
+            apply_rpg_damage("A", "B", reply_a)
+            
+        # 5️⃣ Kiểm tra chiến thắng
+        is_victory, victory_msg = check_victory()
+        if is_victory:
+            st.session_state.debate_finished = True
+            st.session_state.debate_running = False
+            
+        return
 def render_hp_display():
     """Hiển thị thanh HP và nhật ký"""
     config = st.session_state.config
@@ -672,12 +687,21 @@ def render_user_input():
             last_a_msg = st.session_state.dialog_a[-1]
             with st.container():
                 st.markdown(f"""
-                <div style="background-color: #1e2d42; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #58a6ff;">
+                <div style="
+                    background-color: #1e2d42; 
+                    padding: 15px; 
+                    border-radius: 10px; 
+                    margin-bottom: 15px; 
+                    border-left: 4px solid #58a6ff;
+                    max-height: 250px;
+                    overflow-y: auto;
+                    word-wrap: break-word;
+                ">
                     <strong>{config.persona_a} vừa nói:</strong><br>
-                    {last_a_msg[:300]}...
+                    {last_a_msg}
                 </div>
                 """, unsafe_allow_html=True)
-        
+
         user_input = st.text_area(
             "Phản biện của bạn:",
             value=st.session_state.get('user_input_b', ''),
@@ -688,17 +712,15 @@ def render_user_input():
         
         col1, col2 = st.columns([1, 4])
         with col1:
-            if st.button("🚀 Gửi", key="send_b", use_container_width=True):
+            if st.button("🚀 Gửi", key="send_user_b", use_container_width=True):
                 if user_input.strip():
                     st.session_state.user_input_b = user_input
-                    with st.spinner("Đang xử lý..."):
-                        process_user_reply("USER_B", user_input.strip())
-                        st.rerun()
+                    process_user_reply("USER_B", user_input.strip())
                 else:
                     st.warning("Vui lòng nhập nội dung phản biện!")
         
         with col2:
-            if st.button("🗑️ Xóa", key="clear_b", type="secondary", use_container_width=True):
+            if st.button("🗑️ Xóa", key="clear_user_b", type="secondary", use_container_width=True):
                 st.session_state.user_input_b = ""
                 st.rerun()
     
@@ -714,7 +736,7 @@ def render_user_input():
                 st.markdown(f"""
                 <div style="background-color: #1f362d; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #2a4a3d;">
                     <strong>{config.persona_a}:</strong><br>
-                    {last_a_msg[:150]}...
+                    {last_a_msg}
                 </div>
                 """, unsafe_allow_html=True)
             
@@ -722,7 +744,7 @@ def render_user_input():
                 st.markdown(f"""
                 <div style="background-color: #3b2225; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #4d2c30;">
                     <strong>{config.persona_b}:</strong><br>
-                    {last_b_msg[:150]}...
+                    {last_b_msg}
                 </div>
                 """, unsafe_allow_html=True)
         
@@ -736,23 +758,21 @@ def render_user_input():
         
         col1, col2 = st.columns([1, 4])
         with col1:
-            if st.button("🚀 Gửi", key="send_c", use_container_width=True):
+            if st.button("🚀 Gửi", key="send_user_c", use_container_width=True):
                 if user_input.strip():
                     st.session_state.user_input_c = user_input
-                    with st.spinner("Đang xử lý..."):
-                        process_user_reply("USER_C", user_input.strip())
-                        st.rerun()
+                    process_user_reply("USER_C", user_input.strip())
                 else:
                     st.warning("Vui lòng nhập nội dung!")
         
         with col2:
-            if st.button("🗑️ Xóa", key="clear_c", type="secondary", use_container_width=True):
+            if st.button("🗑️ Xóa", key="clear_user_c", type="secondary", use_container_width=True):
                 st.session_state.user_input_c = ""
                 st.rerun()
 
 
 def render_chat_messages():
-    """Hiển thị các tin nhắn trong chat (FIX THỨ TỰ – GIỮ NGUYÊN STYLE)"""
+    """Hiển thị các tin nhắn trong chat"""
     config = st.session_state.config
     debate_state = st.session_state.get('debate_state', DebateState())
 
@@ -760,16 +780,19 @@ def render_chat_messages():
     dialog_b = st.session_state.dialog_b
     dialog_c = st.session_state.dialog_c
 
-    # A là người mở lượt → số vòng hợp lệ
-    max_rounds = min(len(dialog_a), len(dialog_b))
-
-    if debate_state.is_fast_mode:
-        display_rounds = max_rounds
+    # Tính số lượt hiển thị theo chế độ
+    if config.mode == "Tranh luận 1v1 với AI":
+        # Chế độ 1v1: hiển thị tất cả A đã có, B có thể ít hơn
+        display_rounds = len(dialog_a)
     else:
-        display_rounds = min(debate_state.current_display_index, max_rounds)
+        # Các chế độ khác: hiển thị theo số lượt đã hiển thị
+        max_rounds = min(len(dialog_a), len(dialog_b))
+        if debate_state.is_fast_mode:
+            display_rounds = max_rounds
+        else:
+            display_rounds = min(debate_state.current_display_index, max_rounds)
 
     for i in range(display_rounds):
-
         # ===== A =====
         if i < len(dialog_a):
             msg_a = strip_persona_prefix(st.session_state.dialog_a[i])
@@ -825,10 +848,12 @@ def render_chat_messages():
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
-    if st.button("▶️ Tiếp tục", key="continue_bottom"):
-        st.session_state._trigger_continue = True
-        st.rerun()
-
+    
+    # Nút Tiếp tục (chỉ cho AI vs AI)
+    if config.mode not in ["Tranh luận 1v1 với AI", "Tham gia 3 bên (Thành viên C)"]:
+        if st.button("▶️ Tiếp tục", key="continue_bottom"):
+            st.session_state._trigger_continue = True
+            st.rerun()
 
 
     # ===== Animation (GIỮ NGUYÊN HÀNH VI CŨ) =====
@@ -1590,5 +1615,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
