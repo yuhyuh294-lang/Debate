@@ -499,48 +499,52 @@ def add_ai_turn_auto():
 def process_user_reply(user_role: str, message: str):
     """Xử lý phản hồi của người dùng"""
     config = st.session_state.config
-    
+    debate_state = st.session_state.debate_state
+
+    # =========================================================
+    # =============== MODE 1v1: USER vs AI ====================
+    # =========================================================
     if user_role == "USER_B":
+        # 1️⃣ LƯU NỘI DUNG USER
         st.session_state.dialog_b.append(message)
         st.session_state.user_input_b = ""
-        st.session_state.debate_state.waiting_for_user = False
-        st.session_state.debate_state.current_turn = "A"
-        
+
+        # 2️⃣ ÁP DỤNG RPG (NẾU CÓ)
         if config.mode == "Chế độ RPG (Game Tranh luận)":
             apply_rpg_damage("B", "A", message)
-        
-        if len(st.session_state.dialog_a) < config.rounds:
-            with st.spinner(f"{config.persona_a} đang trả lời..."):
-                last_b = message
-                reply_a = generate_ai_reply("A", last_b)
-                st.session_state.dialog_a.append(reply_a)
-                
-                if config.mode == "Chế độ RPG (Game Tranh luận)":
-                    apply_rpg_damage("A", "B", reply_a)
-                
-                st.session_state.debate_state.waiting_for_user = True
-                st.session_state.debate_state.current_turn = "USER_B"
-    
+
+        # 3️⃣ KHÔNG SINH AI Ở ĐÂY ❌
+        # AI sẽ được sinh khi bấm "Tiếp tục"
+
+        # 4️⃣ CẬP NHẬT TRẠNG THÁI
+        debate_state.waiting_for_user = False
+        debate_state.current_turn = "A"
+
+        return  # ⛔ RẤT QUAN TRỌNG: dừng tại đây
+
+
+    # =========================================================
+    # =============== MODE USER C (AI vs AI) ==================
+    # =========================================================
     elif user_role == "USER_C":
         st.session_state.dialog_c.append(message)
         st.session_state.user_input_c = ""
-        st.session_state.debate_state.waiting_for_user = False
-        
+        debate_state.waiting_for_user = False
+
         if len(st.session_state.dialog_a) < config.rounds:
             with st.spinner(f"{config.persona_a} và {config.persona_b} đang tranh luận..."):
                 reply_a = generate_ai_reply("A", message)
                 st.session_state.dialog_a.append(reply_a)
-                
+
                 reply_b = generate_ai_reply("B", reply_a)
                 st.session_state.dialog_b.append(reply_b)
-                
+
                 if config.mode == "Chế độ RPG (Game Tranh luận)":
                     apply_rpg_damage("A", "B", reply_a)
                     apply_rpg_damage("B", "A", reply_b)
-                
-                st.session_state.debate_state.waiting_for_user = True
-                st.session_state.debate_state.current_turn = "USER_C"
 
+                debate_state.waiting_for_user = True
+                debate_state.current_turn = "USER_C"
 # --- UI Components ---
 def render_hp_display():
     """Hiển thị thanh HP và nhật ký"""
@@ -1614,6 +1618,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
