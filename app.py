@@ -666,6 +666,7 @@ def render_control_buttons():
             if st.button("🔄 Làm mới", use_container_width=True):
                 st.session_state.debate_state.current_display_index = 0
                 st.rerun()
+
 def render_user_input():
     """Hiển thị ô input cho người dùng"""
     config = st.session_state.config
@@ -763,6 +764,8 @@ def render_user_input():
             if st.button("🗑️ Xóa", key="clear_c", type="secondary", use_container_width=True):
                 st.session_state.user_input_c = ""
                 st.rerun()
+
+
 def render_chat_messages():
     """Hiển thị các tin nhắn trong chat (FIX THỨ TỰ – GIỮ NGUYÊN STYLE)"""
     config = st.session_state.config
@@ -1569,28 +1572,6 @@ div[data-baseweb="slider"] {
 # --- Main App ---
 def main():
     """Hàm chính điều hướng ứng dụng"""
-
-    # ===== XỬ LÝ CONTINUE TRƯỚC RENDER =====
-    if st.session_state.get("_trigger_continue", False):
-        st.session_state._trigger_continue = False
-
-        config = st.session_state.config
-        debate_state = st.session_state.debate_state
-
-        # ❗ CHỈ AUTO AI KHI LÀ AI vs AI
-        if config.mode in ["Tranh luận 2 AI (Tiêu chuẩn)", "Chế độ RPG (Game Tranh luận)"]:
-            add_ai_turn_auto()
-            debate_state.current_display_index += 1
-
-            is_victory, _ = check_victory()
-            if is_victory:
-                st.session_state.debate_finished = True
-                st.session_state.debate_running = False
-
-        # ❗ MODE 1v1: KHÔNG GỌI AI, CHỈ HIỆN UI
-        st.rerun()
-
-    # ===== CONFIG PAGE =====
     st.set_page_config(
         page_title="🤖 AI Debate Bot",
         layout="wide",
@@ -1601,16 +1582,26 @@ def main():
             'About': "### AI Debate Bot\nTranh luận thông minh với AI"
         }
     )
-
-    # ===== CSS =====
+    
+    # Áp dụng CSS
     st.markdown(CHAT_STYLE, unsafe_allow_html=True)
-
-    # ===== ROUTER =====
+    
     if st.session_state.page == "home":
         render_home()
     else:
         render_debate()
+    if st.session_state.get("_trigger_continue", False):
+        st.session_state._trigger_continue = False
 
+        add_ai_turn_auto()
+        st.session_state.debate_state.current_display_index += 1
+
+        is_victory, _ = check_victory()
+        if is_victory:
+            st.session_state.debate_finished = True
+            st.session_state.debate_running = False
+
+        st.rerun()
 
 if __name__ == "__main__":
     main()
