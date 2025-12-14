@@ -480,38 +480,20 @@ def initialize_debate():
         st.rerun()
 
 def add_ai_turn_auto():
-    """Sinh lượt AI"""
+    """Sinh lượt AI (AI vs AI / RPG)"""
     config = st.session_state.config
     debate_state = st.session_state.debate_state
 
-    # =========================================================
-    # =============== MODE 1v1 USER vs AI =====================
-    # =========================================================
-    if config.mode == "1v1 USER vs AI":
-        last_user = st.session_state.dialog_b[-1] if st.session_state.dialog_b else ""
-        reply_a = generate_ai_reply("A", last_user)
-        st.session_state.dialog_a.append(reply_a)
-
-        if config.mode == "Chế độ RPG (Game Tranh luận)":
-            apply_rpg_damage("A", "B", reply_a)
-
-        debate_state.waiting_for_user = True
-        debate_state.current_turn = "USER_B"
-        debate_state.turn_count += 1
-        return
-
-
-    # =========================================================
-    # ==================== AI vs AI ===========================
-    # =========================================================
+    # ===== A trả lời =====
     last_b = st.session_state.dialog_b[-1] if st.session_state.dialog_b else ""
     reply_a = generate_ai_reply("A", last_b)
     st.session_state.dialog_a.append(reply_a)
 
-    last_a = reply_a
-    reply_b = generate_ai_reply("B", last_a)
+    # ===== B trả lời =====
+    reply_b = generate_ai_reply("B", reply_a)
     st.session_state.dialog_b.append(reply_b)
 
+    # ===== RPG DAMAGE =====
     if config.mode == "Chế độ RPG (Game Tranh luận)":
         apply_rpg_damage("A", "B", reply_a)
         apply_rpg_damage("B", "A", reply_b)
@@ -1622,6 +1604,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
