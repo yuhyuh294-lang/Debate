@@ -477,32 +477,23 @@ def initialize_debate():
         st.rerun()
 
 def add_ai_turn_auto():
-    """Thêm lượt AI tự động (cho chế độ 2 AI)"""
+    """1 lượt = A + B"""
     config = st.session_state.config
-    
-    if not st.session_state.dialog_a:
-        return
-    
-    if st.session_state.debate_state.current_turn == "A":
-        last_b = st.session_state.dialog_b[-1] if st.session_state.dialog_b else ""
-        reply_a = generate_ai_reply("A", last_b)
-        st.session_state.dialog_a.append(reply_a)
-        
-        if config.mode == "Chế độ RPG (Game Tranh luận)" and last_b:
-            apply_rpg_damage("A", "B", reply_a)
-        
-        st.session_state.debate_state.current_turn = "B"
-    
-    elif st.session_state.debate_state.current_turn == "B":
-        last_a = st.session_state.dialog_a[-1] if st.session_state.dialog_a else ""
-        reply_b = generate_ai_reply("B", last_a)
-        st.session_state.dialog_b.append(reply_b)
-        
-        if config.mode == "Chế độ RPG (Game Tranh luận)" and last_a:
-            apply_rpg_damage("B", "A", reply_b)
-        
-        st.session_state.debate_state.current_turn = "A"
-    
+
+    last_b = st.session_state.dialog_b[-1] if st.session_state.dialog_b else ""
+    reply_a = generate_ai_reply("A", last_b)
+    st.session_state.dialog_a.append(reply_a)
+
+    if config.mode == "Chế độ RPG (Game Tranh luận)" and last_b:
+        apply_rpg_damage("A", "B", reply_a)
+
+    last_a = reply_a
+    reply_b = generate_ai_reply("B", last_a)
+    st.session_state.dialog_b.append(reply_b)
+
+    if config.mode == "Chế độ RPG (Game Tranh luận)":
+        apply_rpg_damage("B", "A", reply_b)
+
     st.session_state.debate_state.turn_count += 1
 
 def process_user_reply(user_role: str, message: str):
@@ -785,7 +776,7 @@ def render_chat_messages():
     dialog_c = st.session_state.dialog_c
 
     # A là người mở lượt → số vòng hợp lệ
-    max_rounds = len(dialog_a)
+    max_rounds = min(len(dialog_a), len(dialog_b))
 
     if debate_state.is_fast_mode:
         display_rounds = max_rounds
@@ -1614,6 +1605,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
