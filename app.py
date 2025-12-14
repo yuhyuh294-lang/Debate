@@ -785,87 +785,107 @@ def render_user_input():
                 st.session_state.user_input_c = ""
                 st.rerun()
 def render_chat_messages():
-    """Hiển thị các tin nhắn trong chat (A → USER → B → C)"""
+    """Render chat – FIXED cho TẤT CẢ chế độ"""
     config = st.session_state.config
-    debate_state = st.session_state.get('debate_state', DebateState())
+    debate_state = st.session_state.debate_state
 
     dialog_a = st.session_state.dialog_a
     dialog_b = st.session_state.dialog_b
     dialog_c = st.session_state.dialog_c
     dialog_user_b = st.session_state.get("dialog_user_b", [])
 
-    # số vòng = theo số lần USER trả lời
-    max_rounds = len(dialog_user_b)
+    # ======================================================
+    # MODE 1v1: USER vs AI
+    # ======================================================
+    if config.mode == "1v1 USER vs AI":
+        rounds = len(dialog_a)  # ❗ anchor là AI
 
-    if debate_state.is_fast_mode:
-        display_rounds = max_rounds
-    else:
-        display_rounds = min(debate_state.current_display_index, max_rounds)
+        for i in range(rounds):
 
-    for i in range(display_rounds):
-
-        # ===== A =====
-        if i < len(dialog_a):
-            msg_a = strip_persona_prefix(dialog_a[i])
-            if msg_a:
+            # ===== A =====
+            if i < len(dialog_a):
+                msg_a = strip_persona_prefix(dialog_a[i])
                 st.markdown(f"""
-                <div style="display:flex;width:100%;margin:5px 0;">
+                <div style="display:flex;margin:6px 0;">
                     <div style="padding:15px 20px;border-radius:18px;
-                        max-width:75%;background:linear-gradient(135deg,#1f362d,#2a4a3d);
-                        color:#e0f7e9;margin-right:auto;border:1px solid #2a4a3d;">
+                        background:linear-gradient(135deg,#1f362d,#2a4a3d);
+                        color:#e0f7e9;max-width:75%;">
                         <b style="color:#4cd964;">A{i+1} ({config.persona_a})</b><br>
                         {msg_a}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
-        # ===== USER =====
-        if i < len(dialog_user_b):
-            user_msg = dialog_user_b[i]
-            st.markdown(f"""
-            <div style="display:flex;width:100%;justify-content:flex-end;margin:5px 0;">
-                <div style="padding:14px 18px;border-radius:18px;
-                    max-width:70%;background:#2563eb;color:white;">
-                    <b>Bạn:</b><br>
-                    {user_msg}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        # ===== B (AI) =====
-        if i < len(dialog_b) and i < len(dialog_user_b):
-            msg_b = strip_persona_prefix(dialog_b[i])
-            if msg_b:
+            # ===== USER =====
+            if i < len(dialog_user_b):
+                user_msg = dialog_user_b[i]
                 st.markdown(f"""
-                <div style="display:flex;width:100%;justify-content:flex-end;margin:5px 0;">
-                    <div style="padding:15px 20px;border-radius:18px;
-                        max-width:75%;background:linear-gradient(135deg,#3b2225,#4d2c30);
-                        color:#ffe5d9;border:1px solid #4d2c30;">
-                        <b style="color:#ff9500;">B{i+1} ({config.persona_b})</b><br>
-                        {msg_b}
+                <div style="display:flex;justify-content:flex-end;margin:6px 0;">
+                    <div style="padding:14px 18px;border-radius:18px;
+                        background:#2563eb;color:white;max-width:70%;">
+                        <b>Bạn:</b><br>
+                        {user_msg}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
+        return  # ⛔ QUAN TRỌNG: kết thúc tại đây
+
+    # ======================================================
+    # MODE AI vs AI / RPG / 3 BÊN (GIỮ LOGIC CŨ)
+    # ======================================================
+    max_rounds = min(len(dialog_a), len(dialog_b))
+
+    display_rounds = (
+        max_rounds if debate_state.is_fast_mode
+        else min(debate_state.current_display_index, max_rounds)
+    )
+
+    for i in range(display_rounds):
+
+        # ===== A =====
+        if i < len(dialog_a):
+            msg_a = strip_persona_prefix(dialog_a[i])
+            st.markdown(f"""
+            <div style="display:flex;margin:6px 0;">
+                <div style="padding:15px 20px;border-radius:18px;
+                    background:linear-gradient(135deg,#1f362d,#2a4a3d);
+                    color:#e0f7e9;max-width:75%;">
+                    <b style="color:#4cd964;">A{i+1} ({config.persona_a})</b><br>
+                    {msg_a}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ===== B =====
+        if i < len(dialog_b):
+            msg_b = strip_persona_prefix(dialog_b[i])
+            st.markdown(f"""
+            <div style="display:flex;justify-content:flex-end;margin:6px 0;">
+                <div style="padding:15px 20px;border-radius:18px;
+                    background:linear-gradient(135deg,#3b2225,#4d2c30);
+                    color:#ffe5d9;max-width:75%;">
+                    <b style="color:#ff9500;">B{i+1} ({config.persona_b})</b><br>
+                    {msg_b}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
         # ===== C =====
-        if (
-            config.mode == "Tham gia 3 bên (Thành viên C)"
-            and i < len(dialog_c)
-            and i < len(dialog_user_b)
-        ):
+        if config.mode == "Tham gia 3 bên (Thành viên C)" and i < len(dialog_c):
             msg_c = dialog_c[i]
             st.markdown(f"""
             <div style="display:flex;justify-content:center;margin:6px 0;">
                 <div style="padding:15px 20px;border-radius:18px;
-                    max-width:85%;background:linear-gradient(135deg,#192f44,#2a3f5f);
-                    color:#d6e4ff;border:1px solid #2a3f5f;">
+                    background:linear-gradient(135deg,#192f44,#2a3f5f);
+                    color:#d6e4ff;max-width:85%;">
                     <b style="color:#8bb8e8;">C{i+1} ({config.persona_c})</b><br>
                     {msg_c}
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-    # ===== CONTINUE BUTTON =====
+    # ===== CONTINUE =====
     if config.mode != "1v1 USER vs AI":
         if st.button("▶️ Tiếp tục", key="continue_bottom"):
             st.session_state._trigger_continue = True
@@ -1638,6 +1658,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
