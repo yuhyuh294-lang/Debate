@@ -111,7 +111,7 @@ def init_session_state():
         st.session_state.final_style = ""
     
     if "page" not in st.session_state:
-        st.session_state.page = "home"
+        st.session_state.page = "login"  # Mặc định là trang login
     
     if "debate_started" not in st.session_state:
         st.session_state.debate_started = False
@@ -128,6 +128,16 @@ def init_session_state():
     
     if "suggestion_c" not in st.session_state:
         st.session_state.suggestion_c = ""
+    
+    # --- TÍNH NĂNG ĐĂNG NHẬP VÀ KHO DỮ LIỆU ---
+    if "current_user" not in st.session_state:
+        st.session_state.current_user = None
+    
+    if "users_db" not in st.session_state:
+        st.session_state.users_db = {}
+    
+    if "saved_debates" not in st.session_state:
+        st.session_state.saved_debates = {}
 
 # Gọi khởi tạo
 init_session_state()
@@ -599,6 +609,77 @@ def render_progress_bar():
         # Hiển thị thông tin
         st.caption(f"📊 **Tiến độ:** {current}/{total} lượt ({int(progress*100)}%)")
 
+# --- TÍNH NĂNG ĐĂNG NHẬP VÀ KHO DỮ LIỆU ---
+def handle_login(username: str) -> bool:
+    """Xử lý đăng nhập đơn giản"""
+    if not username.strip():
+        return False
+    
+    # Lưu vào "database"
+    if username not in st.session_state.users_db:
+        st.session_state.users_db[username] = {
+            "created_at": datetime.now().isoformat(),
+            "debates": []
+        }
+    
+    st.session_state.current_user = username
+    return True
+
+def handle_logout():
+    """Đăng xuất"""
+    st.session_state.current_user = None
+    st.session_state.page = "login"
+    st.rerun()
+
+def save_current_debate():
+    """Lưu cuộc tranh luận hiện tại"""
+    if not st.session_state.current_user:
+        return False
+    
+    debate_id = f"debate_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    
+    debate_data = {
+        "id": debate_id,
+        "topic": st.session_state.topic_used,
+        "mode": st.session_state.config.mode,
+        "created_at": datetime.now().isoformat(),
+        "dialog_a": st.session_state.dialog_a,
+        "dialog_b": st.session_state.dialog_b,
+        "dialog_c": st.session_state.dialog_c,
+        "config": {
+            "persona_a": st.session_state.config.persona_a,
+            "persona_b": st.session_state.config.persona_b,
+            "style": st.session_state.final_style
+        }
+    }
+    
+    # Lưu vào user's debates
+    if "debates" not in st.session_state.users_db[st.session_state.current_user]:
+        st.session_state.users_db[st.session_state.current_user]["debates"] = []
+    
+    st.session_state.users_db[st.session_state.current_user]["debates"].append(debate_data)
+    
+    # Cũng lưu vào saved_debates để dễ truy cập
+    if st.session_state.current_user not in st.session_state.saved_debates:
+        st.session_state.saved_debates[st.session_state.current_user] = []
+    
+    st.session_state.saved_debates[st.session_state.current_user].append(debate_data)
+    
+    return True
+
+def load_debate(debate_data: Dict):
+    """Tải lại cuộc tranh luận từ dữ liệu đã lưu"""
+    st.session_state.dialog_a = debate_data['dialog_a']
+    st.session_state.dialog_b = debate_data['dialog_b']
+    st.session_state.dialog_c = debate_data.get('dialog_c', [])
+    st.session_state.topic_used = debate_data['topic']
+    st.session_state.final_style = debate_data['config']['style']
+    st.session_state.config.persona_a = debate_data['config']['persona_a']
+    st.session_state.config.persona_b = debate_data['config']['persona_b']
+    st.session_state.debate_finished = True
+    st.session_state.page = "debate"
+    st.rerun()
+
 def render_hp_display():
     """Hiển thị thanh HP và nhật ký"""
     config = st.session_state.config
@@ -1003,9 +1084,88 @@ def run_courtroom_analysis():
         st.session_state.courtroom_analysis = analysis
 
 # --- Main Pages ---
+def render_login():
+    """Trang đăng nhập/đăng ký"""
+    st.title("🔐 Đăng nhập AI Debate Bot")
+    
+    col1, col2 = st.columns([2, 3])
+    
+    with col1:
+        st.markdown("""
+        ### 🤖 Chào mừng
+        
+        **Tính năng cho thành viên:**
+        - 💾 Lưu lịch sử tranh luận
+        - 📊 Xem thống kê cá nhân
+        - ⭐ Đánh dấu yêu thích
+        - 🔍 Tìm kiếm lịch sử
+        
+        *Không cần mật khẩu, chỉ cần username!*
+        """)
+    
+    with col2:
+        tab1, tab2 = st.tabs(["🚀 Đăng nhập", "📝 Đăng ký"])
+        
+        with tab1:
+            username = st.text_input("Tên người dùng", key="login_username")
+            
+            if st.button("Đăng nhập", type="primary", use_container_width=True):
+                if handle_login(username):
+                    st.success(f"Chào mừng {username}!")
+                    time.sleep(1)
+                    st.session_state.page = "home"
+                    st.rerun()
+                else:
+                    st.error("Vui lòng nhập tên người dùng!")
+        
+        with tab2:
+            new_username = st.text_input("Chọn tên người dùng", key="register_username")
+            
+            if st.button("Tạo tài khoản", type="secondary", use_container_width=True):
+                if new_username.strip():
+                    if new_username in st.session_state.users_db:
+                        st.warning("Tên người dùng đã tồn tại!")
+                    else:
+                        handle_login(new_username)
+                        st.success(f"Tạo tài khoản thành công: {new_username}")
+                        time.sleep(1)
+                        st.session_state.page = "home"
+                        st.rerun()
+                else:
+                    st.error("Vui lòng nhập tên người dùng!")
+        
+        # Đăng nhập nhanh (demo)
+        st.markdown("---")
+        st.write("**Đăng nhập nhanh (demo):**")
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            if st.button("👤 User1", use_container_width=True):
+                handle_login("User1")
+                st.session_state.page = "home"
+                st.rerun()
+        with col_b:
+            if st.button("👤 User2", use_container_width=True):
+                handle_login("User2")
+                st.session_state.page = "home"
+                st.rerun()
+        with col_c:
+            if st.button("👤 Guest", use_container_width=True):
+                handle_login("Guest")
+                st.session_state.page = "home"
+                st.rerun()
+
 def render_home():
     """Trang chủ thiết lập"""
     st.title("🤖 AI Debate Bot – Thiết lập tranh luận")
+    
+    # Hiển thị thông tin user
+    if st.session_state.current_user:
+        col_user, col_logout = st.columns([4, 1])
+        with col_user:
+            st.markdown(f"👤 **Đang đăng nhập với:** `{st.session_state.current_user}`")
+        with col_logout:
+            if st.button("🚪 Đăng xuất", key="logout_home"):
+                handle_logout()
     
     # Sidebar settings - ĐẦY ĐỦ
     with st.sidebar:
@@ -1049,11 +1209,17 @@ def render_home():
             "Token tối đa/lượt", 100, 1000, 600, 50
         )
         
+        # Nút điều hướng kho dữ liệu
+        if st.button("📚 Kho dữ liệu của tôi", type="secondary", use_container_width=True):
+            st.session_state.page = "history"
+            st.rerun()
+        
         if st.button("🔄 Reset Debate", type="secondary", use_container_width=True):
             for key in list(st.session_state.keys()):
-                if key not in ["config", "page"]:
+                if key not in ["config", "page", "current_user", "users_db", "saved_debates"]:
                     del st.session_state[key]
             init_session_state()
+            st.session_state.page = "home"
             st.rerun()
     
     # 1. Chế độ tranh luận (giữ nguyên)
@@ -1285,8 +1451,77 @@ def render_home():
             st.session_state.page = "debate"
             st.rerun()
 
+def render_history():
+    """Trang lịch sử tranh luận"""
+    st.title("📚 Kho tranh luận của bạn")
+    
+    if not st.session_state.current_user:
+        st.warning("Vui lòng đăng nhập để xem lịch sử!")
+        if st.button("🔐 Đăng nhập ngay"):
+            st.session_state.page = "login"
+            st.rerun()
+        return
+    
+    user_debates = st.session_state.users_db.get(st.session_state.current_user, {}).get("debates", [])
+    
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        st.subheader(f"👤 {st.session_state.current_user}")
+    with col2:
+        st.metric("Tổng cuộc tranh luận", len(user_debates))
+    with col3:
+        if st.button("🔙 Về trang chủ", use_container_width=True):
+            st.session_state.page = "home"
+            st.rerun()
+    
+    if not user_debates:
+        st.info("Bạn chưa có cuộc tranh luận nào được lưu.")
+        if st.button("🎭 Bắt đầu tranh luận mới"):
+            st.session_state.page = "home"
+            st.rerun()
+        return
+    
+    # Hiển thị danh sách tranh luận
+    for i, debate in enumerate(reversed(user_debates[-10:])):  # Hiển thị 10 cái gần nhất
+        with st.expander(f"🗣️ {debate['topic'][:60]}...", expanded=i==0):
+            col1, col2, col3 = st.columns([3, 1, 1])
+            
+            with col1:
+                st.markdown(f"**Chủ đề:** {debate['topic']}")
+                st.markdown(f"**Chế độ:** {debate['mode']}")
+                st.markdown(f"**Thời gian:** {datetime.fromisoformat(debate['created_at']).strftime('%d/%m/%Y %H:%M')}")
+                st.markdown(f"**Số lượt:** {len(debate['dialog_a'])} lượt A, {len(debate['dialog_b'])} lượt B")
+            
+            with col2:
+                if st.button("📖 Xem lại", key=f"view_{debate['id']}", use_container_width=True):
+                    load_debate(debate)
+            
+            with col3:
+                if st.button("🗑️ Xóa", key=f"delete_{debate['id']}", type="secondary", use_container_width=True):
+                    # Xóa khỏi danh sách
+                    st.session_state.users_db[st.session_state.current_user]["debates"] = [
+                        d for d in user_debates if d['id'] != debate['id']
+                    ]
+                    st.success("Đã xóa!")
+                    st.rerun()
+    
+    # Xuất tất cả dữ liệu
+    st.markdown("---")
+    if st.button("📥 Xuất tất cả dữ liệu (JSON)", use_container_width=True):
+        data = {
+            "user": st.session_state.current_user,
+            "debates": user_debates,
+            "exported_at": datetime.now().isoformat()
+        }
+        st.download_button(
+            "Tải file JSON",
+            data=json.dumps(data, ensure_ascii=False, indent=2),
+            file_name=f"debate_history_{st.session_state.current_user}_{datetime.now().strftime('%Y%m%d')}.json",
+            mime="application/json"
+        )
+
 def render_debate():
-    """Trang tranh luận chính - ĐÃ THÊM THANH TIẾN TRÌNH"""
+    """Trang tranh luận chính - ĐÃ THÊM THANH TIẾN TRÌNH VÀ NÚT LƯU"""
     st.title("🔥 Cuộc tranh luận")
     
     config = st.session_state.config
@@ -1307,15 +1542,30 @@ def render_debate():
             <p style="margin: 8px 0;"><strong>Phong cách:</strong> {st.session_state.final_style}</p>
         """
         
+        if st.session_state.current_user:
+            html_content += f'<p style="margin: 8px 0;"><strong>Người dùng:</strong> {st.session_state.current_user}</p>'
+        
         html_content += "</div>"
         
         st.markdown(html_content, unsafe_allow_html=True)
         
+        # Nút điều hướng
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔙 Trang chủ", use_container_width=True, key="back_home"):
+                st.session_state.page = "home"
+                st.rerun()
+        with col2:
+            if st.button("📚 Kho dữ liệu", use_container_width=True, key="to_history"):
+                st.session_state.page = "history"
+                st.rerun()
+        
         st.markdown("---")
         
-        if st.button("🔙 Về trang chủ", use_container_width=True, key="back_home"):
-            st.session_state.page = "home"
-            st.rerun()
+        # Thông tin user
+        if st.session_state.current_user:
+            if st.button("🚪 Đăng xuất", use_container_width=True):
+                handle_logout()
     
     st.header(f"Chủ đề: {st.session_state.topic_used}")
     
@@ -1369,42 +1619,90 @@ def render_debate():
         st.markdown("---")
         
         if config.mode != "Tham gia 3 bên (Thành viên C)":
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                if st.button("⚖️ Phân tích AI", use_container_width=True, type="secondary", key="ai_analysis"):
-                    run_courtroom_analysis()
-                    st.rerun()
-            
-            with col2:
-                transcript_lines = []
-                max_len = max(len(st.session_state.dialog_a), 
-                             len(st.session_state.dialog_b),
-                             len(st.session_state.dialog_c))
+            # THÊM: Nút lưu vào kho dữ liệu nếu đã đăng nhập
+            if st.session_state.current_user:
+                col1, col2, col3, col4 = st.columns(4)
                 
-                for i in range(max_len):
-                    if i < len(st.session_state.dialog_a):
-                        transcript_lines.append(f"A{i+1} ({config.persona_a}): {st.session_state.dialog_a[i]}")
-                    if i < len(st.session_state.dialog_b):
-                        transcript_lines.append(f"B{i+1} ({config.persona_b}): {st.session_state.dialog_b[i]}")
-                    if i < len(st.session_state.dialog_c):
-                        transcript_lines.append(f"C{i+1} ({config.persona_c}): {st.session_state.dialog_c[i]}")
+                with col1:
+                    if st.button("💾 Lưu vào kho", use_container_width=True, type="secondary"):
+                        if save_current_debate():
+                            st.success("Đã lưu cuộc tranh luận!")
+                            st.rerun()
+                        else:
+                            st.error("Lỗi khi lưu!")
                 
-                transcript = "\n".join(transcript_lines)
+                with col2:
+                    if st.button("⚖️ Phân tích AI", use_container_width=True, type="secondary", key="ai_analysis"):
+                        run_courtroom_analysis()
+                        st.rerun()
                 
-                st.download_button(
-                    "📥 Tải Transcript",
-                    data=transcript,
-                    file_name=f"debate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                    mime="text/plain",
-                    use_container_width=True,
-                    key="download_transcript"
-                )
-            
-            with col3:
-                if st.button("🔄 Tranh luận mới", type="primary", use_container_width=True, key="new_debate"):
-                    st.session_state.page = "home"
-                    st.rerun()
+                with col3:
+                    transcript_lines = []
+                    max_len = max(len(st.session_state.dialog_a), 
+                                 len(st.session_state.dialog_b),
+                                 len(st.session_state.dialog_c))
+                    
+                    for i in range(max_len):
+                        if i < len(st.session_state.dialog_a):
+                            transcript_lines.append(f"A{i+1} ({config.persona_a}): {st.session_state.dialog_a[i]}")
+                        if i < len(st.session_state.dialog_b):
+                            transcript_lines.append(f"B{i+1} ({config.persona_b}): {st.session_state.dialog_b[i]}")
+                        if i < len(st.session_state.dialog_c):
+                            transcript_lines.append(f"C{i+1} ({config.persona_c}): {st.session_state.dialog_c[i]}")
+                    
+                    transcript = "\n".join(transcript_lines)
+                    
+                    st.download_button(
+                        "📥 Tải Transcript",
+                        data=transcript,
+                        file_name=f"debate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                        key="download_transcript"
+                    )
+                
+                with col4:
+                    if st.button("🔄 Tranh luận mới", type="primary", use_container_width=True, key="new_debate"):
+                        st.session_state.page = "home"
+                        st.rerun()
+            else:
+                # Nếu chưa đăng nhập
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    if st.button("⚖️ Phân tích AI", use_container_width=True, type="secondary", key="ai_analysis"):
+                        run_courtroom_analysis()
+                        st.rerun()
+                
+                with col2:
+                    transcript_lines = []
+                    max_len = max(len(st.session_state.dialog_a), 
+                                 len(st.session_state.dialog_b),
+                                 len(st.session_state.dialog_c))
+                    
+                    for i in range(max_len):
+                        if i < len(st.session_state.dialog_a):
+                            transcript_lines.append(f"A{i+1} ({config.persona_a}): {st.session_state.dialog_a[i]}")
+                        if i < len(st.session_state.dialog_b):
+                            transcript_lines.append(f"B{i+1} ({config.persona_b}): {st.session_state.dialog_b[i]}")
+                        if i < len(st.session_state.dialog_c):
+                            transcript_lines.append(f"C{i+1} ({config.persona_c}): {st.session_state.dialog_c[i]}")
+                    
+                    transcript = "\n".join(transcript_lines)
+                    
+                    st.download_button(
+                        "📥 Tải Transcript",
+                        data=transcript,
+                        file_name=f"debate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                        key="download_transcript"
+                    )
+                
+                with col3:
+                    if st.button("🔄 Tranh luận mới", type="primary", use_container_width=True, key="new_debate"):
+                        st.session_state.page = "home"
+                        st.rerun()
         
         if st.session_state.courtroom_analysis:
             st.markdown("---")
@@ -1702,11 +2000,21 @@ def main():
     # Áp dụng CSS
     st.markdown(CHAT_STYLE, unsafe_allow_html=True)
     
-    if st.session_state.page == "home":
-        render_home()
-    else:
-        render_debate()
+    # Kiểm tra nếu chưa có trang, mặc định là login
+    if "page" not in st.session_state:
+        st.session_state.page = "login"
     
+    # Điều hướng trang
+    if st.session_state.page == "login":
+        render_login()
+    elif st.session_state.page == "home":
+        render_home()
+    elif st.session_state.page == "debate":
+        render_debate()
+    elif st.session_state.page == "history":
+        render_history()
+    
+    # Xử lý nút tiếp tục cho AI vs AI
     if st.session_state.get("_trigger_continue", False):
         st.session_state._trigger_continue = False
         add_ai_turn_auto()
