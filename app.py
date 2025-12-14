@@ -480,27 +480,43 @@ def initialize_debate():
         st.rerun()
 
 def add_ai_turn_auto():
+    """Sinh lượt AI"""
     config = st.session_state.config
+    debate_state = st.session_state.debate_state
 
-    if not st.session_state.dialog_user_b:
+    # =========================================================
+    # =============== MODE 1v1 USER vs AI =====================
+    # =========================================================
+    if config.mode == "1v1 USER vs AI":
+        last_user = st.session_state.dialog_b[-1] if st.session_state.dialog_b else ""
+        reply_a = generate_ai_reply("A", last_user)
+        st.session_state.dialog_a.append(reply_a)
+
+        if config.mode == "Chế độ RPG (Game Tranh luận)":
+            apply_rpg_damage("A", "B", reply_a)
+
+        debate_state.waiting_for_user = True
+        debate_state.current_turn = "USER_B"
+        debate_state.turn_count += 1
         return
 
-    last_user = st.session_state.dialog_user_b[-1]
 
-    reply_a = generate_ai_reply("A", last_user)
+    # =========================================================
+    # ==================== AI vs AI ===========================
+    # =========================================================
+    last_b = st.session_state.dialog_b[-1] if st.session_state.dialog_b else ""
+    reply_a = generate_ai_reply("A", last_b)
     st.session_state.dialog_a.append(reply_a)
 
-    if config.mode == "Chế độ RPG (Game Tranh luận)":
-        apply_rpg_damage("A", "B", reply_a)
-
-    reply_b = generate_ai_reply("B", reply_a)
+    last_a = reply_a
+    reply_b = generate_ai_reply("B", last_a)
     st.session_state.dialog_b.append(reply_b)
 
     if config.mode == "Chế độ RPG (Game Tranh luận)":
+        apply_rpg_damage("A", "B", reply_a)
         apply_rpg_damage("B", "A", reply_b)
 
-    st.session_state.debate_state.turn_count += 1
-
+    debate_state.turn_count += 1
 def process_user_reply(user_role: str, message: str):
     """Xử lý phản hồi của người dùng"""
     config = st.session_state.config
@@ -510,26 +526,23 @@ def process_user_reply(user_role: str, message: str):
     # =============== MODE 1v1: USER vs AI ====================
     # =========================================================
     if user_role == "USER_B":
-        # 1️⃣ LƯU NỘI DUNG USER
-        st.session_state.dialog_user_b.append(message)
+        # 1️⃣ HIỂN THỊ NGAY MESSAGE CỦA USER
+        st.session_state.dialog_b.append(message)
         st.session_state.user_input_b = ""
 
-        # 2️⃣ ÁP DỤNG RPG (NẾU CÓ)
+        # 2️⃣ RPG (NẾU CÓ)
         if config.mode == "Chế độ RPG (Game Tranh luận)":
             apply_rpg_damage("B", "A", message)
 
-        # 3️⃣ KHÔNG SINH AI Ở ĐÂY ❌
-        # AI sẽ được sinh khi bấm "Tiếp tục"
-
-        # 4️⃣ CẬP NHẬT TRẠNG THÁI
+        # 3️⃣ KHÓA INPUT – CHỜ AI
         debate_state.waiting_for_user = False
         debate_state.current_turn = "A"
 
-        return  # ⛔ RẤT QUAN TRỌNG: dừng tại đây
+        return  # ⛔ CỰC KỲ QUAN TRỌNG (KHÔNG CHO CHẠY TIẾP)
 
 
     # =========================================================
-    # =============== MODE USER C (AI vs AI) ==================
+    # =============== MODE USER C (GIỮ NGUYÊN) =================
     # =========================================================
     elif user_role == "USER_C":
         st.session_state.dialog_c.append(message)
@@ -550,7 +563,6 @@ def process_user_reply(user_role: str, message: str):
 
                 debate_state.waiting_for_user = True
                 debate_state.current_turn = "USER_C"
-# --- UI Components ---
 def render_hp_display():
     """Hiển thị thanh HP và nhật ký"""
     config = st.session_state.config
@@ -821,7 +833,7 @@ def render_chat_messages():
             """, unsafe_allow_html=True)
 
         # ===== B (AI) =====
-        if i < len(dialog_b):
+        if i < len(dialog_b) and i < len(dialog_user_b):
             msg_b = strip_persona_prefix(dialog_b[i])
             if msg_b:
                 st.markdown(f"""
@@ -839,6 +851,7 @@ def render_chat_messages():
         if (
             config.mode == "Tham gia 3 bên (Thành viên C)"
             and i < len(dialog_c)
+            and i < len(dialog_user_b)
         ):
             msg_c = dialog_c[i]
             st.markdown(f"""
@@ -851,8 +864,12 @@ def render_chat_messages():
                 </div>
             </div>
             """, unsafe_allow_html=True)
-    # ===== Animation (GIỮ NGUYÊN HÀNH VI CŨ) =====
 
+    # ===== CONTINUE BUTTON =====
+    if config.mode != "1v1 USER vs AI":
+        if st.button("▶️ Tiếp tục", key="continue_bottom"):
+            st.session_state._trigger_continue = True
+            st.rerun()
 def run_courtroom_analysis():
     """Chạy phân tích phiên tòa AI"""
     config = st.session_state.config
@@ -1578,24 +1595,24 @@ div[data-baseweb="slider"] {
 def main():
     """Hàm chính điều hướng ứng dụng"""
 
-    # ===== XỬ LÝ CONTINUE TRƯỚC RENDER =====
-    if st.session_state.get("_trigger_continue", False):
+    config = st.session_state.config
+    debate_state = st.session_state.debate_state
+
+    # ===== XỬ LÝ CONTINUE (CHỈ AI vs AI) =====
+    if (
+        st.session_state.get("_trigger_continue", False)
+        and config.mode in ["Tranh luận 2 AI (Tiêu chuẩn)", "Chế độ RPG (Game Tranh luận)"]
+    ):
         st.session_state._trigger_continue = False
 
-        config = st.session_state.config
-        debate_state = st.session_state.debate_state
+        add_ai_turn_auto()
+        debate_state.current_display_index += 1
 
-        # ❗ CHỈ AUTO AI KHI LÀ AI vs AI
-        if config.mode in ["Tranh luận 2 AI (Tiêu chuẩn)", "Chế độ RPG (Game Tranh luận)"]:
-            add_ai_turn_auto()
-            debate_state.current_display_index += 1
+        is_victory, _ = check_victory()
+        if is_victory:
+            st.session_state.debate_finished = True
+            st.session_state.debate_running = False
 
-            is_victory, _ = check_victory()
-            if is_victory:
-                st.session_state.debate_finished = True
-                st.session_state.debate_running = False
-
-        # ❗ MODE 1v1: KHÔNG GỌI AI, CHỈ HIỆN UI
         st.rerun()
 
     # ===== CONFIG PAGE =====
@@ -1619,9 +1636,9 @@ def main():
     else:
         render_debate()
 
-
 if __name__ == "__main__":
     main()
+
 
 
 
