@@ -1104,35 +1104,17 @@ def render_login():
         """)
     
     with col2:
-        tab1, tab2 = st.tabs(["🚀 Đăng nhập", "📝 Đăng ký"])
+        # CHỈ CÒN PHẦN ĐĂNG NHẬP, KHÔNG CÓ TAB ĐĂNG KÝ
+        username = st.text_input("Tên người dùng", key="login_username")
         
-        with tab1:
-            username = st.text_input("Tên người dùng", key="login_username")
-            
-            if st.button("Đăng nhập", type="primary", use_container_width=True):
-                if handle_login(username):
-                    st.success(f"Chào mừng {username}!")
-                    time.sleep(1)
-                    st.session_state.page = "home"
-                    st.rerun()
-                else:
-                    st.error("Vui lòng nhập tên người dùng!")
-        
-        with tab2:
-            new_username = st.text_input("Chọn tên người dùng", key="register_username")
-            
-            if st.button("Tạo tài khoản", type="secondary", use_container_width=True):
-                if new_username.strip():
-                    if new_username in st.session_state.users_db:
-                        st.warning("Tên người dùng đã tồn tại!")
-                    else:
-                        handle_login(new_username)
-                        st.success(f"Tạo tài khoản thành công: {new_username}")
-                        time.sleep(1)
-                        st.session_state.page = "home"
-                        st.rerun()
-                else:
-                    st.error("Vui lòng nhập tên người dùng!")
+        if st.button("Đăng nhập", type="primary", use_container_width=True):
+            if handle_login(username):
+                st.success(f"Chào mừng {username}!")
+                time.sleep(1)
+                st.session_state.page = "home"
+                st.rerun()
+            else:
+                st.error("Vui lòng nhập tên người dùng!")
         
         # Đăng nhập nhanh (demo)
         st.markdown("---")
@@ -1153,7 +1135,6 @@ def render_login():
                 handle_login("Guest")
                 st.session_state.page = "home"
                 st.rerun()
-
 def render_home():
     """Trang chủ thiết lập"""
     st.title("🤖 AI Debate Bot – Thiết lập tranh luận")
