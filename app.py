@@ -465,7 +465,7 @@ def initialize_debate():
                 apply_rpg_damage("B", "A", b_open)
                 
         else:
-            st.session_state.dialog_b.append(b_open)
+            
             st.session_state.debate_state.current_turn = "B"
             st.session_state.debate_state.waiting_for_user = False
             
@@ -1590,4 +1590,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
