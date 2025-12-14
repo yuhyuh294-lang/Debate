@@ -63,9 +63,8 @@ class DebateState:
 # --- Khởi tạo Session State ---
 def init_session_state():
     """Khởi tạo tất cả session state variables"""
-    # Thêm vào phần init_session_state() hoặc đầu file
     if "current_tab" not in st.session_state:
-        st.session_state.current_tab = "tab1"  # Mặc định là tab1
+        st.session_state.current_tab = "tab1"
     if "config" not in st.session_state:
         st.session_state.config = DebateConfig()
     
@@ -119,10 +118,17 @@ def init_session_state():
     
     if "debate_finished" not in st.session_state:
         st.session_state.debate_finished = False
+    
     if "_trigger_continue" not in st.session_state:
         st.session_state._trigger_continue = False
-
     
+    # Thêm cho tính năng gợi ý
+    if "suggestion_b" not in st.session_state:
+        st.session_state.suggestion_b = ""
+    
+    if "suggestion_c" not in st.session_state:
+        st.session_state.suggestion_c = ""
+
 # Gọi khởi tạo
 init_session_state()
 
@@ -542,6 +548,57 @@ def process_user_reply(user_role: str, message: str):
             st.session_state.debate_running = False
             
         return
+
+# --- TÍNH NĂNG 6: Trợ lý viết cho người dùng ---
+def get_writing_suggestion(user_role: str, context: str) -> str:
+    """Gợi ý nội dung cho người dùng"""
+    config = st.session_state.config
+    
+    prompt = f"""
+    Bạn là trợ lý viết phản biện. Người dùng đang tham gia tranh luận với vai trò:
+    - Vai trò: {user_role}
+    - Persona: {config.persona_b if user_role == "USER_B" else config.persona_c}
+    - Chủ đề: {st.session_state.topic_used}
+    
+    Ngữ cảnh gần nhất:
+    {context[:500]}
+    
+    Hãy đề xuất 2-3 ý tưởng ngắn gọn để người dùng phản biện tiếp theo.
+    Mỗi ý tưởng không quá 1 câu, viết bằng tiếng Việt.
+    """
+    
+    try:
+        return call_chat([{"role": "user", "content": prompt}], max_tokens=200)
+    except:
+        return "1. Hãy tập trung vào điểm mâu thuẫn trong lập luận đối phương.\n2. Đưa ra ví dụ cụ thể để hỗ trợ quan điểm của bạn.\n3. Hỏi những câu hỏi thách thức giả định của đối phương."
+
+# --- TÍNH NĂNG 9: Thanh tiến trình ---
+def render_progress_bar():
+    """Hiển thị thanh tiến trình cuộc tranh luận"""
+    config = st.session_state.config
+    
+    if config.mode == "Tranh luận 1v1 với AI":
+        # 1v1: người dùng có thể không nhập đủ rounds
+        current = len(st.session_state.dialog_a)  # Chỉ đếm A vì A luôn có sau mỗi lượt
+        total = config.rounds
+    elif config.mode == "Tham gia 3 bên (Thành viên C)":
+        # 3 bên: đếm tất cả
+        current = len(st.session_state.dialog_a) + len(st.session_state.dialog_b) + len(st.session_state.dialog_c)
+        total = config.rounds * 3
+    else:
+        # Các chế độ khác: đếm A và B
+        current = len(st.session_state.dialog_a) + len(st.session_state.dialog_b)
+        total = config.rounds * 2
+    
+    if total > 0:
+        progress = min(1.0, current / total)
+        
+        # Hiển thị progress bar đơn giản
+        st.progress(progress)
+        
+        # Hiển thị thông tin
+        st.caption(f"📊 **Tiến độ:** {current}/{total} lượt ({int(progress*100)}%)")
+
 def render_hp_display():
     """Hiển thị thanh HP và nhật ký"""
     config = st.session_state.config
@@ -593,14 +650,15 @@ def render_hp_display():
                 st.write(f"• {log}")
 
 def render_control_buttons():
-    """Hiển thị các nút điều khiển"""
+    """Hiển thị các nút điều khiển - ĐÃ SỬA: BỎ NÚT 'Thêm 1 lượt'"""
     config = st.session_state.config
     debate_state = st.session_state.get('debate_state', DebateState())
     if not hasattr(debate_state, 'waiting_for_user'):
         debate_state.waiting_for_user = False
     
     if not debate_state.waiting_for_user:
-        col1, col2, col3, col4 = st.columns(4)
+        # CHỈ CÒN 3 CỘT: Tiếp tục, Tua nhanh, Làm mới
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             if st.button("▶️ Tiếp tục", use_container_width=True, 
@@ -646,29 +704,12 @@ def render_control_buttons():
                          help="Tính năng chỉ khả dụng cho chế độ AI vs AI")
         
         with col3:
-            if config.mode in ["Tranh luận 2 AI (Tiêu chuẩn)", "Chế độ RPG (Game Tranh luận)"]:
-                if st.button("➕ Thêm 1 lượt", use_container_width=True,
-                           disabled=st.session_state.get('debate_finished', False)):
-                    with st.spinner("Đang thêm lượt..."):
-                        add_ai_turn_auto()
-                        
-                        is_victory, victory_msg = check_victory()
-                        if is_victory:
-                            st.session_state.debate_finished = True
-                            st.session_state.debate_running = False
-                        
-                        st.rerun()
-            else:
-                st.button("➕ Thêm 1 lượt", disabled=True, use_container_width=True,
-                         help="Tính năng chỉ khả dụng cho chế độ AI vs AI")
-        
-        with col4:
             if st.button("🔄 Làm mới", use_container_width=True):
                 st.session_state.debate_state.current_display_index = 0
                 st.rerun()
 
 def render_user_input():
-    """Hiển thị ô input cho người dùng"""
+    """Hiển thị ô input cho người dùng - ĐÃ THÊM TÍNH NĂNG GỢI Ý"""
     config = st.session_state.config
     debate_state = st.session_state.get('debate_state', DebateState())
     
@@ -702,6 +743,20 @@ def render_user_input():
                 </div>
                 """, unsafe_allow_html=True)
 
+        # Hiển thị gợi ý nếu có
+        if st.session_state.suggestion_b:
+            with st.expander("💡 Gợi ý từ AI (nhấn để xem)"):
+                st.info(st.session_state.suggestion_b)
+                col_copy, col_clear = st.columns(2)
+                with col_copy:
+                    if st.button("📋 Sử dụng gợi ý này", key="use_suggestion_b", use_container_width=True):
+                        st.session_state.user_input_b = st.session_state.suggestion_b
+                        st.rerun()
+                with col_clear:
+                    if st.button("🗑️ Xóa gợi ý", key="clear_suggestion_b", use_container_width=True):
+                        st.session_state.suggestion_b = ""
+                        st.rerun()
+
         user_input = st.text_area(
             "Phản biện của bạn:",
             value=st.session_state.get('user_input_b', ''),
@@ -710,7 +765,7 @@ def render_user_input():
             height=120
         )
         
-        col1, col2 = st.columns([1, 4])
+        col1, col2, col3 = st.columns([1, 1, 2])
         with col1:
             if st.button("🚀 Gửi", key="send_user_b", use_container_width=True):
                 if user_input.strip():
@@ -720,8 +775,20 @@ def render_user_input():
                     st.warning("Vui lòng nhập nội dung phản biện!")
         
         with col2:
+            if st.button("💡 Gợi ý", key="suggest_b", use_container_width=True):
+                if st.session_state.dialog_a:
+                    context = st.session_state.dialog_a[-1]
+                    with st.spinner("AI đang suy nghĩ..."):
+                        suggestion = get_writing_suggestion("USER_B", context)
+                        st.session_state.suggestion_b = suggestion
+                        st.rerun()
+                else:
+                    st.warning("Chưa có ngữ cảnh để gợi ý.")
+        
+        with col3:
             if st.button("🗑️ Xóa", key="clear_user_b", type="secondary", use_container_width=True):
                 st.session_state.user_input_b = ""
+                st.session_state.suggestion_b = ""
                 st.rerun()
     
     elif debate_state.current_turn == "USER_C":
@@ -747,7 +814,21 @@ def render_user_input():
                     {last_b_msg}
                 </div>
                 """, unsafe_allow_html=True)
-        
+
+        # Hiển thị gợi ý nếu có
+        if st.session_state.suggestion_c:
+            with st.expander("💡 Gợi ý từ AI (nhấn để xem)"):
+                st.info(st.session_state.suggestion_c)
+                col_copy, col_clear = st.columns(2)
+                with col_copy:
+                    if st.button("📋 Sử dụng gợi ý này", key="use_suggestion_c", use_container_width=True):
+                        st.session_state.user_input_c = st.session_state.suggestion_c
+                        st.rerun()
+                with col_clear:
+                    if st.button("🗑️ Xóa gợi ý", key="clear_suggestion_c", use_container_width=True):
+                        st.session_state.suggestion_c = ""
+                        st.rerun()
+
         user_input = st.text_area(
             "Quan điểm của bạn:",
             value=st.session_state.get('user_input_c', ''),
@@ -756,7 +837,7 @@ def render_user_input():
             height=120
         )
         
-        col1, col2 = st.columns([1, 4])
+        col1, col2, col3 = st.columns([1, 1, 2])
         with col1:
             if st.button("🚀 Gửi", key="send_user_c", use_container_width=True):
                 if user_input.strip():
@@ -766,8 +847,20 @@ def render_user_input():
                     st.warning("Vui lòng nhập nội dung!")
         
         with col2:
+            if st.button("💡 Gợi ý", key="suggest_c", use_container_width=True):
+                if st.session_state.dialog_a and st.session_state.dialog_b:
+                    context = f"Bên A: {st.session_state.dialog_a[-1]}\nBên B: {st.session_state.dialog_b[-1]}"
+                    with st.spinner("AI đang suy nghĩ..."):
+                        suggestion = get_writing_suggestion("USER_C", context)
+                        st.session_state.suggestion_c = suggestion
+                        st.rerun()
+                else:
+                    st.warning("Chưa có ngữ cảnh để gợi ý.")
+        
+        with col3:
             if st.button("🗑️ Xóa", key="clear_user_c", type="secondary", use_container_width=True):
                 st.session_state.user_input_c = ""
+                st.session_state.suggestion_c = ""
                 st.rerun()
 
 
@@ -855,8 +948,6 @@ def render_chat_messages():
             st.session_state._trigger_continue = True
             st.rerun()
 
-
-    # ===== Animation (GIỮ NGUYÊN HÀNH VI CŨ) =====
 
 def run_courtroom_analysis():
     """Chạy phân tích phiên tòa AI"""
@@ -1189,11 +1280,13 @@ def render_home():
             st.session_state.courtroom_analysis = None
             st.session_state.user_input_b = ""
             st.session_state.user_input_c = ""
+            st.session_state.suggestion_b = ""
+            st.session_state.suggestion_c = ""
             st.session_state.page = "debate"
             st.rerun()
 
 def render_debate():
-    """Trang tranh luận chính"""
+    """Trang tranh luận chính - ĐÃ THÊM THANH TIẾN TRÌNH"""
     st.title("🔥 Cuộc tranh luận")
     
     config = st.session_state.config
@@ -1214,7 +1307,6 @@ def render_debate():
             <p style="margin: 8px 0;"><strong>Phong cách:</strong> {st.session_state.final_style}</p>
         """
         
-        
         html_content += "</div>"
         
         st.markdown(html_content, unsafe_allow_html=True)
@@ -1226,6 +1318,9 @@ def render_debate():
             st.rerun()
     
     st.header(f"Chủ đề: {st.session_state.topic_used}")
+    
+    # === THÊM THANH TIẾN TRÌNH (TÍNH NĂNG 9) ===
+    render_progress_bar()
     
     with st.container():
         info_col1, info_col2 = st.columns(2)
@@ -1244,12 +1339,13 @@ def render_debate():
     if config.mode == "Chế độ RPG (Game Tranh luận)":
         render_hp_display()
     
-   
-    
+    # Nút điều khiển (đã bỏ nút "Thêm 1 lượt")
     render_control_buttons()
     
+    # Ô input người dùng (đã thêm tính năng gợi ý)
     render_user_input()
     
+    # Hiển thị tin nhắn
     render_chat_messages()
     
     is_victory, victory_msg = check_victory()
@@ -1576,6 +1672,16 @@ div[data-baseweb="slider"] {
 [role="option"]:hover {
     background-color: #2a3f5f !important;
 }
+
+/* Progress bar styling */
+.stProgress > div > div > div > div {
+    background: linear-gradient(to right, #58a6ff, #8bb8e8) !important;
+}
+
+.stProgress > div > div {
+    height: 10px !important;
+    border-radius: 10px !important;
+}
 </style>
 """
 
@@ -1600,21 +1706,16 @@ def main():
         render_home()
     else:
         render_debate()
+    
     if st.session_state.get("_trigger_continue", False):
         st.session_state._trigger_continue = False
-
         add_ai_turn_auto()
         st.session_state.debate_state.current_display_index += 1
-
         is_victory, _ = check_victory()
         if is_victory:
             st.session_state.debate_finished = True
             st.session_state.debate_running = False
-
         st.rerun()
 
 if __name__ == "__main__":
     main()
-
-
-
