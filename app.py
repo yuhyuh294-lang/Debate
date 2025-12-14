@@ -487,6 +487,8 @@ def add_ai_turn_auto():
         apply_rpg_damage("B", "A", reply_b)
 
     debate_state.turn_count += 1
+    # QUAN TRỌNG: Cập nhật current_display_index để hiển thị đúng
+    debate_state.current_display_index += 1
 
 def process_user_reply(user_role: str, message: str):
     config = st.session_state.config
@@ -685,7 +687,7 @@ def render_control_buttons():
                 else:
                     with st.spinner("Đang thêm lượt tranh luận..."):
                         add_ai_turn_auto()
-                        st.session_state.debate_state.current_display_index += 1
+                        # KHÔNG tăng current_display_index ở đây nữa vì đã tăng trong add_ai_turn_auto()
                         
                         is_victory, victory_msg = check_victory()
                         if is_victory:
@@ -713,6 +715,8 @@ def render_control_buttons():
                                 time.sleep(0.1)
                         
                         debate_state.is_fast_mode = False
+                        # CẬP NHẬT: Đảm bảo current_display_index hiển thị tất cả
+                        debate_state.current_display_index = len(st.session_state.dialog_a)
                         st.session_state.debate_finished = True
                         st.session_state.debate_running = False
                         st.rerun()
@@ -885,6 +889,7 @@ def render_chat_messages():
     dialog_b = st.session_state.dialog_b
     dialog_c = st.session_state.dialog_c
 
+    # Tính số lượt cần hiển thị
     if config.mode == "Tranh luận 1v1 với AI":
         display_rounds = len(dialog_a)
     else:
@@ -892,6 +897,7 @@ def render_chat_messages():
         if debate_state.is_fast_mode:
             display_rounds = max_rounds
         else:
+            # Sử dụng current_display_index để hiển thị đúng số lượt
             display_rounds = min(debate_state.current_display_index, max_rounds)
 
     for i in range(display_rounds):
@@ -1164,7 +1170,6 @@ def render_home():
             key="tab1_topic_input"
         )
         
-        # ĐÃ XÓA NÚT RESET - CHỈ CÒN NÚT ÁP DỤNG
         if st.button("✅ Áp dụng", key="tab1_apply", use_container_width=True, disabled=not current_topic.strip()):
             if current_topic.strip() != st.session_state.config.topic:
                 st.session_state.config.topic = current_topic.strip()
