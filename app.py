@@ -62,6 +62,12 @@ class DebateState:
 
 # --- Khởi tạo Session State ---
 def init_session_state():
+    if "voice_input_b" not in st.session_state:
+        st.session_state.voice_input_b = ""
+
+    if "voice_input_c" not in st.session_state:
+        st.session_state.voice_input_c = ""
+
     """Khởi tạo tất cả session state variables"""
     # Thêm vào phần init_session_state() hoặc đầu file
     if "current_tab" not in st.session_state:
@@ -666,7 +672,32 @@ def render_control_buttons():
             if st.button("🔄 Làm mới", use_container_width=True):
                 st.session_state.debate_state.current_display_index = 0
                 st.rerun()
+def render_voice_button(target="B"):
+    st.markdown(f"""
+    <button onclick="startDictation_{target}()">🎤 Nói</button>
 
+    <script>
+    function startDictation_{target}() {{
+      if (window.SpeechRecognition || window.webkitSpeechRecognition) {{
+        var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        var recognition = new SpeechRecognition();
+        recognition.lang = 'vi-VN';
+
+        recognition.onresult = function(e) {{
+          const text = e.results[0][0].transcript;
+          window.parent.postMessage({{
+            type: 'voice_input',
+            target: '{target}',
+            text: text
+          }}, '*');
+        }};
+        recognition.start();
+      }} else {{
+        alert("Trình duyệt không hỗ trợ ghi giọng nói");
+      }}
+    }}
+    </script>
+    """, unsafe_allow_html=True)
 def render_user_input():
     """Hiển thị ô input cho người dùng"""
     config = st.session_state.config
@@ -680,18 +711,41 @@ def render_user_input():
     
     st.markdown("---")
     
+    # ================= USER B =================
     if debate_state.current_turn == "USER_B":
         st.subheader(f"💬 Lượt của bạn ({config.persona_b})")
         
         if st.session_state.dialog_a:
             last_a_msg = st.session_state.dialog_a[-1]
-            with st.container():
-                st.markdown(f"""
-                <div style="background-color: #1e2d42; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #58a6ff;">
-                    <strong>{config.persona_a} vừa nói:</strong><br>
-                    {last_a_msg[:300]}...
-                </div>
-                """, unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style="background-color: #1e2d42; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 4px solid #58a6ff;">
+                <strong>{config.persona_a} vừa nói:</strong><br>
+                {last_a_msg[:300]}...
+            </div>
+            """, unsafe_allow_html=True)
+
+        # 🎤 NÚT GHI GIỌNG NÓI
+        st.markdown("""
+        <button onclick="startDictationB()">🎤 Nói</button>
+        <script>
+        function startDictationB() {
+          if (window.SpeechRecognition || window.webkitSpeechRecognition) {
+            var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            var recognition = new SpeechRecognition();
+            recognition.lang = 'vi-VN';
+            recognition.onresult = function(e) {
+              const text = e.results[0][0].transcript;
+              const ta = window.parent.document.querySelector('textarea[data-testid="stTextArea"]');
+              if (ta) {
+                ta.value += " " + text;
+                ta.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+            };
+            recognition.start();
+          }
+        }
+        </script>
+        """, unsafe_allow_html=True)
         
         user_input = st.text_area(
             "Phản biện của bạn:",
@@ -706,40 +760,52 @@ def render_user_input():
             if st.button("🚀 Gửi", key="send_b", use_container_width=True):
                 if user_input.strip():
                     st.session_state.user_input_b = user_input
-                    with st.spinner("Đang xử lý..."):
-                        process_user_reply("USER_B", user_input.strip())
-                        st.rerun()
-                else:
-                    st.warning("Vui lòng nhập nội dung phản biện!")
+                    process_user_reply("USER_B", user_input.strip())
+                    st.rerun()
         
         with col2:
-            if st.button("🗑️ Xóa", key="clear_b", type="secondary", use_container_width=True):
+            if st.button("🗑️ Xóa", key="clear_b", use_container_width=True):
                 st.session_state.user_input_b = ""
                 st.rerun()
-    
+
+    # ================= USER C =================
     elif debate_state.current_turn == "USER_C":
         st.subheader(f"💬 Lượt của bạn ({config.persona_c})")
         
         if st.session_state.dialog_a and st.session_state.dialog_b:
-            last_a_msg = st.session_state.dialog_a[-1]
-            last_b_msg = st.session_state.dialog_b[-1]
-            
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.markdown(f"""
-                <div style="background-color: #1f362d; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #2a4a3d;">
-                    <strong>{config.persona_a}:</strong><br>
-                    {last_a_msg[:150]}...
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col_b:
-                st.markdown(f"""
-                <div style="background-color: #3b2225; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #4d2c30;">
-                    <strong>{config.persona_b}:</strong><br>
-                    {last_b_msg[:150]}...
-                </div>
-                """, unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style="background-color: #1f362d; padding: 12px; border-radius: 8px; margin-bottom: 10px;">
+                <strong>{config.persona_a}:</strong><br>
+                {st.session_state.dialog_a[-1][:150]}...
+            </div>
+            <div style="background-color: #3b2225; padding: 12px; border-radius: 8px; margin-bottom: 10px;">
+                <strong>{config.persona_b}:</strong><br>
+                {st.session_state.dialog_b[-1][:150]}...
+            </div>
+            """, unsafe_allow_html=True)
+
+        # 🎤 NÚT GHI GIỌNG NÓI
+        st.markdown("""
+        <button onclick="startDictationC()">🎤 Nói</button>
+        <script>
+        function startDictationC() {
+          if (window.SpeechRecognition || window.webkitSpeechRecognition) {
+            var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            var recognition = new SpeechRecognition();
+            recognition.lang = 'vi-VN';
+            recognition.onresult = function(e) {
+              const text = e.results[0][0].transcript;
+              const ta = window.parent.document.querySelector('textarea[data-testid="stTextArea"]');
+              if (ta) {
+                ta.value += " " + text;
+                ta.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+            };
+            recognition.start();
+          }
+        }
+        </script>
+        """, unsafe_allow_html=True)
         
         user_input = st.text_area(
             "Quan điểm của bạn:",
@@ -754,17 +820,13 @@ def render_user_input():
             if st.button("🚀 Gửi", key="send_c", use_container_width=True):
                 if user_input.strip():
                     st.session_state.user_input_c = user_input
-                    with st.spinner("Đang xử lý..."):
-                        process_user_reply("USER_C", user_input.strip())
-                        st.rerun()
-                else:
-                    st.warning("Vui lòng nhập nội dung!")
+                    process_user_reply("USER_C", user_input.strip())
+                    st.rerun()
         
         with col2:
-            if st.button("🗑️ Xóa", key="clear_c", type="secondary", use_container_width=True):
+            if st.button("🗑️ Xóa", key="clear_c", use_container_width=True):
                 st.session_state.user_input_c = ""
                 st.rerun()
-
 
 def render_chat_messages():
     """Hiển thị các tin nhắn trong chat (FIX THỨ TỰ – GIỮ NGUYÊN STYLE)"""
@@ -1572,24 +1634,8 @@ div[data-baseweb="slider"] {
 # --- Main App ---
 def main():
     """Hàm chính điều hướng ứng dụng"""
-    st.set_page_config(
-        page_title="🤖 AI Debate Bot",
-        layout="wide",
-        initial_sidebar_state="expanded",
-        menu_items={
-            'Get Help': 'https://github.com/your-repo',
-            'Report a bug': 'https://github.com/your-repo/issues',
-            'About': "### AI Debate Bot\nTranh luận thông minh với AI"
-        }
-    )
-    
-    # Áp dụng CSS
-    st.markdown(CHAT_STYLE, unsafe_allow_html=True)
-    
-    if st.session_state.page == "home":
-        render_home()
-    else:
-        render_debate()
+
+    # ===== XỬ LÝ CONTINUE TRƯỚC RENDER =====
     if st.session_state.get("_trigger_continue", False):
         st.session_state._trigger_continue = False
 
@@ -1603,8 +1649,45 @@ def main():
 
         st.rerun()
 
+    # ===== CONFIG PAGE =====
+    st.set_page_config(
+        page_title="🤖 AI Debate Bot",
+        layout="wide",
+        initial_sidebar_state="expanded",
+        menu_items={
+            'Get Help': 'https://github.com/your-repo',
+            'Report a bug': 'https://github.com/your-repo/issues',
+            'About': "### AI Debate Bot\nTranh luận thông minh với AI"
+        }
+    )
+
+    # ===== CSS =====
+    st.markdown(CHAT_STYLE, unsafe_allow_html=True)
+
+    # ===== ROUTER =====
+    if st.session_state.page == "home":
+        render_home()
+    else:
+        render_debate()
+
+    # ===== VOICE INPUT LISTENER =====
+    st.markdown("""
+    <script>
+    window.addEventListener("message", (event) => {
+      if (event.data.type === "voice_input") {
+        const input = document.querySelector('textarea[data-testid="stTextArea"]');
+        if (input) {
+          input.value += " " + event.data.text;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    });
+    </script>
+    """, unsafe_allow_html=True)
+
 if __name__ == "__main__":
     main()
+
 
 
 
