@@ -6,13 +6,11 @@ import time
 import re
 import random 
 import json 
-import re
-from typing import Optional, List, Dict, Any, Tuple
+from typing import List, Dict
 from dataclasses import dataclass, field
 from datetime import datetime
 import io
 
-# --- Cấu hình và Khởi tạo ---
 try:
     GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
     OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", "")
@@ -28,7 +26,6 @@ if not GITHUB_TOKEN and not OPENAI_API_KEY:
 
 from openai import OpenAI
 
-# --- Data Classes ---
 @dataclass
 class DebateConfig:
     mode: str = "Tranh luận 2 AI (Tiêu chuẩn)"
@@ -53,16 +50,14 @@ class RPGState:
 
 @dataclass
 class DebateState:
-    current_turn: str = "A"  # "A", "B", "C", "USER_B", "USER_C"
+    current_turn: str = "A"
     turn_count: int = 0
     is_fast_mode: bool = False
     is_auto_playing: bool = False
     current_display_index: int = 0
     waiting_for_user: bool = False
 
-# --- Khởi tạo Session State ---
 def init_session_state():
-    """Khởi tạo tất cả session state variables"""
     if "current_tab" not in st.session_state:
         st.session_state.current_tab = "tab1"
     if "config" not in st.session_state:
@@ -111,7 +106,7 @@ def init_session_state():
         st.session_state.final_style = ""
     
     if "page" not in st.session_state:
-        st.session_state.page = "login"  # Mặc định là trang login
+        st.session_state.page = "login"
     
     if "debate_started" not in st.session_state:
         st.session_state.debate_started = False
@@ -122,14 +117,12 @@ def init_session_state():
     if "_trigger_continue" not in st.session_state:
         st.session_state._trigger_continue = False
     
-    # Thêm cho tính năng gợi ý
     if "suggestion_b" not in st.session_state:
         st.session_state.suggestion_b = ""
     
     if "suggestion_c" not in st.session_state:
         st.session_state.suggestion_c = ""
     
-    # --- TÍNH NĂNG ĐĂNG NHẬP VÀ KHO DỮ LIỆU ---
     if "current_user" not in st.session_state:
         st.session_state.current_user = None
     
@@ -139,15 +132,12 @@ def init_session_state():
     if "saved_debates" not in st.session_state:
         st.session_state.saved_debates = {}
 
-# Gọi khởi tạo
 init_session_state()
 
-# --- API Helper Functions ---
 def strip_persona_prefix(text: str) -> str:
     return re.sub(r"^\s*\([^)]*\)\s*:\s*", "", text) if text else text
 
 def get_api_client():
-    """Lấy API client dựa trên cấu hình"""
     config = st.session_state.config
     
     if config.api_client == "github" and GITHUB_TOKEN:
@@ -161,7 +151,6 @@ def get_api_client():
             api_key=OPENAI_API_KEY
         )
     else:
-        # Fallback
         if GITHUB_TOKEN:
             return OpenAI(
                 base_url="https://models.github.ai/inference",
@@ -175,9 +164,7 @@ def get_api_client():
         else:
             raise Exception("Không có API key hợp lệ")
 
-def call_chat(messages: List[Dict], model: str = None, temperature: float = None, 
-              max_tokens: int = None) -> str:
-    """Gọi API chat với xử lý lỗi"""
+def call_chat(messages: List[Dict], model: str = None, temperature: float = None, max_tokens: int = None) -> str:
     config = st.session_state.config
     
     if model is None:
@@ -200,9 +187,7 @@ def call_chat(messages: List[Dict], model: str = None, temperature: float = None
         st.error(f"Lỗi API: {str(e)[:200]}")
         return f"[[LỖI: {str(e)[:100]}]]"
 
-# --- Hàm xử lý ảnh ---
 def encode_image_to_base64(image: Image.Image) -> str:
-    """Chuyển đổi ảnh PIL thành base64 string"""
     buffered = io.BytesIO()
     if image.mode in ('RGBA', 'LA') or (image.mode == 'P' and 'transparency' in image.info):
         image = image.convert('RGB')
@@ -210,7 +195,6 @@ def encode_image_to_base64(image: Image.Image) -> str:
     return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
 def analyze_image_for_topic(image: Image.Image) -> List[str]:
-    """Phân tích ảnh để đề xuất chủ đề tranh luận"""
     try:
         base64_image = encode_image_to_base64(image)
         
@@ -269,7 +253,6 @@ def analyze_image_for_topic(image: Image.Image) -> List[str]:
         return ["Lỗi khi phân tích hình ảnh. Vui lòng thử lại."]
 
 def generate_text_topics() -> List[str]:
-    """Tạo chủ đề từ văn bản"""
     prompt = "Hãy đề xuất 3 chủ đề tranh luận thú vị, gây tranh cãi và đa chiều về xã hội, công nghệ, hoặc đạo đức. Trả về dưới dạng danh sách, mỗi chủ đề một dòng."
     
     response = call_chat([{"role": "user", "content": prompt}])
@@ -289,9 +272,7 @@ def generate_text_topics() -> List[str]:
         "Nên ưu tiên phát triển kinh tế hay bảo vệ môi trường?"
     ]
 
-# --- Debate Logic Functions ---
-def generate_opening_statements() -> Tuple[str, str, str]:
-    """Tạo lời mở đầu cho tất cả các bên"""
+def generate_opening_statements() -> tuple[str, str, str]:
     config = st.session_state.config
     topic = st.session_state.topic_used
     
@@ -319,13 +300,12 @@ def generate_opening_statements() -> Tuple[str, str, str]:
     return a_opening, b_opening, c_opening
 
 def generate_ai_reply(speaker: str, last_message: str = "") -> str:
-    """Tạo câu trả lời cho AI"""
     config = st.session_state.config
     
     if speaker == "A":
         persona = config.persona_a
         role = "Ủng hộ"
-    else:  # speaker == "B"
+    else:
         persona = config.persona_b
         role = "Phản đối"
     
@@ -354,7 +334,6 @@ Hãy trả lời ngay.
     return call_chat([{"role": "user", "content": prompt}])
 
 def calculate_rpg_damage(message: str, attacker: str, defender: str) -> Dict:
-    """Tính toán sát thương RPG"""
     length_factor = min(1.0, len(message) / 500)
     
     quality_keywords = ["logic", "chứng minh", "bằng chứng", "thực tế", "khoa học", "thuyết phục"]
@@ -390,7 +369,6 @@ def calculate_rpg_damage(message: str, attacker: str, defender: str) -> Dict:
     }
 
 def apply_rpg_damage(attacker: str, defender: str, message: str):
-    """Áp dụng sát thương RPG"""
     if st.session_state.config.mode != "Chế độ RPG (Game Tranh luận)":
         return
     
@@ -408,8 +386,7 @@ def apply_rpg_damage(attacker: str, defender: str, message: str):
     if len(st.session_state.rpg_state.log) > 10:
         st.session_state.rpg_state.log = st.session_state.rpg_state.log[-10:]
 
-def check_victory() -> Tuple[bool, str]:
-    """Kiểm tra điều kiện chiến thắng"""
+def check_victory() -> tuple[bool, str]:
     config = st.session_state.config
     
     if config.mode == "Chế độ RPG (Game Tranh luận)":
@@ -439,7 +416,6 @@ def check_victory() -> Tuple[bool, str]:
     return False, ""
 
 def get_advantage_status() -> str:
-    """Trả về trạng thái ưu thế hiện tại"""
     if st.session_state.config.mode != "Chế độ RPG (Game Tranh luận)":
         return ""
     
@@ -456,21 +432,15 @@ def get_advantage_status() -> str:
         return "🟡 **Hai bên ngang nhau**"
 
 def initialize_debate():
-    """Khởi tạo cuộc tranh luận"""
     config = st.session_state.config
     st.session_state.debate_state.current_display_index = 1
     with st.spinner("Đang khởi tạo cuộc tranh luận..."):
-        # Chỉ tạo lời mở đầu cho A, B sẽ do người dùng nhập trong 1v1
         a_open = generate_ai_reply("A", "")
         
-        # THÊM: Trong chế độ 1v1, KHÔNG tạo b_open
         if config.mode != "Tranh luận 1v1 với AI":
             b_open = generate_ai_reply("B", a_open)
             st.session_state.dialog_b.append(strip_persona_prefix(b_open))
-        else:
-            # 1v1: chỉ tạo A1, B1 sẽ do người dùng nhập
-            pass
-
+        
         st.session_state.dialog_a.append(strip_persona_prefix(a_open))
 
         if config.mode == "Tranh luận 1v1 với AI":
@@ -490,31 +460,26 @@ def initialize_debate():
             st.session_state.debate_state.current_turn = "B"
             st.session_state.debate_state.waiting_for_user = False
             
-            # RPG damage
             if config.mode == "Chế độ RPG (Game Tranh luận)":
                 apply_rpg_damage("A", "B", a_open)
-                if config.mode != "Tranh luận 1v1 với AI":  # CHỈ áp dụng nếu có b_open
+                if config.mode != "Tranh luận 1v1 với AI":
                     apply_rpg_damage("B", "A", b_open)
         
         st.session_state.debate_started = True
         st.rerun()
 
 def add_ai_turn_auto():
-    """Sinh 1 lượt AI: A -> B (AI vs AI / RPG)"""
     config = st.session_state.config
     debate_state = st.session_state.debate_state
 
-    # ===== LẤY INPUT CHO A =====
     last_b = st.session_state.dialog_b[-1] if st.session_state.dialog_b else ""
 
-    # ===== A =====
     reply_a = generate_ai_reply("A", last_b)
     st.session_state.dialog_a.append(reply_a)
 
     if config.mode == "Chế độ RPG (Game Tranh luận)" and last_b:
         apply_rpg_damage("A", "B", reply_a)
 
-    # ===== B (CHỈ DÙNG A VỪA SINH) =====
     reply_b = generate_ai_reply("B", reply_a)
     st.session_state.dialog_b.append(reply_b)
 
@@ -524,34 +489,27 @@ def add_ai_turn_auto():
     debate_state.turn_count += 1
 
 def process_user_reply(user_role: str, message: str):
-    """Xử lý phản hồi của người dùng"""
     config = st.session_state.config
     debate_state = st.session_state.get('debate_state', DebateState())
     
-    # ================== 1v1 USER vs AI ======================
     if config.mode == "Tranh luận 1v1 với AI" and user_role == "USER_B":
         if not message or not message.strip():
             st.warning("Vui lòng nhập nội dung!")
             return
             
-        # 1️⃣ LƯU phản hồi của người dùng vào dialog_b
         st.session_state.dialog_b.append(message.strip())
-        st.session_state.user_input_b = ""  # Reset input
+        st.session_state.user_input_b = ""
         
-        # 2️⃣ AI (Bên A) trả lời ngay
         reply_a = generate_ai_reply("A", message.strip())
         st.session_state.dialog_a.append(reply_a)
         
-        # 3️⃣ Cập nhật state - vẫn chờ người dùng tiếp theo
         debate_state.waiting_for_user = True
         debate_state.current_turn = "USER_B"
         debate_state.turn_count += 1
         
-        # 4️⃣ RPG damage (nếu có)
         if config.mode == "Chế độ RPG (Game Tranh luận)":
             apply_rpg_damage("A", "B", reply_a)
             
-        # 5️⃣ Kiểm tra chiến thắng
         is_victory, victory_msg = check_victory()
         if is_victory:
             st.session_state.debate_finished = True
@@ -559,9 +517,7 @@ def process_user_reply(user_role: str, message: str):
             
         return
 
-# --- TÍNH NĂNG 6: Trợ lý viết cho người dùng ---
 def get_writing_suggestion(user_role: str, context: str) -> str:
-    """Gợi ý nội dung cho người dùng"""
     config = st.session_state.config
     
     prompt = f"""
@@ -582,40 +538,28 @@ def get_writing_suggestion(user_role: str, context: str) -> str:
     except:
         return "1. Hãy tập trung vào điểm mâu thuẫn trong lập luận đối phương.\n2. Đưa ra ví dụ cụ thể để hỗ trợ quan điểm của bạn.\n3. Hỏi những câu hỏi thách thức giả định của đối phương."
 
-# --- TÍNH NĂNG 9: Thanh tiến trình ---
 def render_progress_bar():
-    """Hiển thị thanh tiến trình cuộc tranh luận"""
     config = st.session_state.config
     
     if config.mode == "Tranh luận 1v1 với AI":
-        # 1v1: người dùng có thể không nhập đủ rounds
-        current = len(st.session_state.dialog_a)  # Chỉ đếm A vì A luôn có sau mỗi lượt
+        current = len(st.session_state.dialog_a)
         total = config.rounds
     elif config.mode == "Tham gia 3 bên (Thành viên C)":
-        # 3 bên: đếm tất cả
         current = len(st.session_state.dialog_a) + len(st.session_state.dialog_b) + len(st.session_state.dialog_c)
         total = config.rounds * 3
     else:
-        # Các chế độ khác: đếm A và B
         current = len(st.session_state.dialog_a) + len(st.session_state.dialog_b)
         total = config.rounds * 2
     
     if total > 0:
         progress = min(1.0, current / total)
-        
-        # Hiển thị progress bar đơn giản
         st.progress(progress)
-        
-        # Hiển thị thông tin
         st.caption(f"📊 **Tiến độ:** {current}/{total} lượt ({int(progress*100)}%)")
 
-# --- TÍNH NĂNG ĐĂNG NHẬP VÀ KHO DỮ LIỆU ---
 def handle_login(username: str) -> bool:
-    """Xử lý đăng nhập đơn giản"""
     if not username.strip():
         return False
     
-    # Lưu vào "database"
     if username not in st.session_state.users_db:
         st.session_state.users_db[username] = {
             "created_at": datetime.now().isoformat(),
@@ -626,13 +570,11 @@ def handle_login(username: str) -> bool:
     return True
 
 def handle_logout():
-    """Đăng xuất"""
     st.session_state.current_user = None
     st.session_state.page = "login"
     st.rerun()
 
-def save_current_debate():
-    """Lưu cuộc tranh luận hiện tại"""
+def save_current_debate() -> bool:
     if not st.session_state.current_user:
         return False
     
@@ -653,13 +595,11 @@ def save_current_debate():
         }
     }
     
-    # Lưu vào user's debates
     if "debates" not in st.session_state.users_db[st.session_state.current_user]:
         st.session_state.users_db[st.session_state.current_user]["debates"] = []
     
     st.session_state.users_db[st.session_state.current_user]["debates"].append(debate_data)
     
-    # Cũng lưu vào saved_debates để dễ truy cập
     if st.session_state.current_user not in st.session_state.saved_debates:
         st.session_state.saved_debates[st.session_state.current_user] = []
     
@@ -668,7 +608,6 @@ def save_current_debate():
     return True
 
 def load_debate(debate_data: Dict):
-    """Tải lại cuộc tranh luận từ dữ liệu đã lưu"""
     st.session_state.dialog_a = debate_data['dialog_a']
     st.session_state.dialog_b = debate_data['dialog_b']
     st.session_state.dialog_c = debate_data.get('dialog_c', [])
@@ -681,7 +620,6 @@ def load_debate(debate_data: Dict):
     st.rerun()
 
 def render_hp_display():
-    """Hiển thị thanh HP và nhật ký"""
     config = st.session_state.config
     rpg = st.session_state.rpg_state
     
@@ -731,14 +669,12 @@ def render_hp_display():
                 st.write(f"• {log}")
 
 def render_control_buttons():
-    """Hiển thị các nút điều khiển - ĐÃ SỬA: BỎ NÚT 'Thêm 1 lượt'"""
     config = st.session_state.config
     debate_state = st.session_state.get('debate_state', DebateState())
     if not hasattr(debate_state, 'waiting_for_user'):
         debate_state.waiting_for_user = False
     
     if not debate_state.waiting_for_user:
-        # CHỈ CÒN 3 CỘT: Tiếp tục, Tua nhanh, Làm mới
         col1, col2, col3 = st.columns(3)
         
         with col1:
@@ -790,7 +726,6 @@ def render_control_buttons():
                 st.rerun()
 
 def render_user_input():
-    """Hiển thị ô input cho người dùng - ĐÃ THÊM TÍNH NĂNG GỢI Ý"""
     config = st.session_state.config
     debate_state = st.session_state.get('debate_state', DebateState())
     
@@ -824,7 +759,6 @@ def render_user_input():
                 </div>
                 """, unsafe_allow_html=True)
 
-        # Hiển thị gợi ý nếu có
         if st.session_state.suggestion_b:
             with st.expander("💡 Gợi ý từ AI (nhấn để xem)"):
                 st.info(st.session_state.suggestion_b)
@@ -896,7 +830,6 @@ def render_user_input():
                 </div>
                 """, unsafe_allow_html=True)
 
-        # Hiển thị gợi ý nếu có
         if st.session_state.suggestion_c:
             with st.expander("💡 Gợi ý từ AI (nhấn để xem)"):
                 st.info(st.session_state.suggestion_c)
@@ -944,9 +877,7 @@ def render_user_input():
                 st.session_state.suggestion_c = ""
                 st.rerun()
 
-
 def render_chat_messages():
-    """Hiển thị các tin nhắn trong chat"""
     config = st.session_state.config
     debate_state = st.session_state.get('debate_state', DebateState())
 
@@ -954,12 +885,9 @@ def render_chat_messages():
     dialog_b = st.session_state.dialog_b
     dialog_c = st.session_state.dialog_c
 
-    # Tính số lượt hiển thị theo chế độ
     if config.mode == "Tranh luận 1v1 với AI":
-        # Chế độ 1v1: hiển thị tất cả A đã có, B có thể ít hơn
         display_rounds = len(dialog_a)
     else:
-        # Các chế độ khác: hiển thị theo số lượt đã hiển thị
         max_rounds = min(len(dialog_a), len(dialog_b))
         if debate_state.is_fast_mode:
             display_rounds = max_rounds
@@ -967,7 +895,6 @@ def render_chat_messages():
             display_rounds = min(debate_state.current_display_index, max_rounds)
 
     for i in range(display_rounds):
-        # ===== A =====
         if i < len(dialog_a):
             msg_a = strip_persona_prefix(st.session_state.dialog_a[i])
             if msg_a:
@@ -984,7 +911,6 @@ def render_chat_messages():
                 </div>
                 """, unsafe_allow_html=True)
 
-        # ===== B (chỉ render nếu A cùng lượt tồn tại) =====
         if i < len(dialog_b) and i < len(dialog_a):
             msg_b = strip_persona_prefix(st.session_state.dialog_b[i])
             if msg_b:
@@ -1001,7 +927,6 @@ def render_chat_messages():
                 </div>
                 """, unsafe_allow_html=True)
 
-        # ===== C (chỉ render nếu A & B đã có) =====
         if (
             config.mode == "Tham gia 3 bên (Thành viên C)"
             and i < len(dialog_c)
@@ -1023,15 +948,12 @@ def render_chat_messages():
                 </div>
                 """, unsafe_allow_html=True)
     
-    # Nút Tiếp tục (chỉ cho AI vs AI)
     if config.mode not in ["Tranh luận 1v1 với AI", "Tham gia 3 bên (Thành viên C)"]:
         if st.button("▶️ Tiếp tục", key="continue_bottom"):
             st.session_state._trigger_continue = True
             st.rerun()
 
-
 def run_courtroom_analysis():
-    """Chạy phân tích phiên tòa AI"""
     config = st.session_state.config
     
     transcript_lines = []
@@ -1083,9 +1005,7 @@ def run_courtroom_analysis():
         )
         st.session_state.courtroom_analysis = analysis
 
-# --- Main Pages ---
 def render_login():
-    """Trang đăng nhập/đăng ký"""
     st.title("🔐 Đăng nhập AI Debate Bot")
     
     col1, col2 = st.columns([2, 3])
@@ -1104,7 +1024,6 @@ def render_login():
         """)
     
     with col2:
-        # CHỈ CÒN PHẦN ĐĂNG NHẬP, KHÔNG CÓ TAB ĐĂNG KÝ
         username = st.text_input("Tên người dùng", key="login_username")
         
         if st.button("Đăng nhập", type="primary", use_container_width=True):
@@ -1116,7 +1035,6 @@ def render_login():
             else:
                 st.error("Vui lòng nhập tên người dùng!")
         
-        # Đăng nhập nhanh (demo)
         st.markdown("---")
         st.write("**Đăng nhập nhanh (demo):**")
         col_a, col_b, col_c = st.columns(3)
@@ -1135,11 +1053,10 @@ def render_login():
                 handle_login("Guest")
                 st.session_state.page = "home"
                 st.rerun()
+
 def render_home():
-    """Trang chủ thiết lập"""
     st.title("🤖 AI Debate Bot – Thiết lập tranh luận")
     
-    # Hiển thị thông tin user
     if st.session_state.current_user:
         col_user, col_logout = st.columns([4, 1])
         with col_user:
@@ -1148,11 +1065,9 @@ def render_home():
             if st.button("🚪 Đăng xuất", key="logout_home"):
                 handle_logout()
     
-    # Sidebar settings - ĐẦY ĐỦ
     with st.sidebar:
         st.header("⚙️ Cài đặt Nâng cao")
         
-        # API selection
         api_options = []
         if GITHUB_TOKEN:
             api_options.append("GitHub Models")
@@ -1167,7 +1082,6 @@ def render_home():
             )
             st.session_state.config.api_client = "github" if "GitHub" in selected_api else "openai"
         
-        # Model selection
         model_options = ["openai/gpt-4.1", "openai/gpt-4o-mini", "openai/gpt-3.5-turbo"]
         if st.session_state.config.api_client == "openai":
             model_options = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo", "gpt-4o", "gpt-4-vision-preview"]
@@ -1190,7 +1104,6 @@ def render_home():
             "Token tối đa/lượt", 100, 1000, 600, 50
         )
         
-        # Nút điều hướng kho dữ liệu
         if st.button("📚 Kho dữ liệu của tôi", type="secondary", use_container_width=True):
             st.session_state.page = "history"
             st.rerun()
@@ -1203,7 +1116,6 @@ def render_home():
             st.session_state.page = "home"
             st.rerun()
     
-    # 1. Chế độ tranh luận (giữ nguyên)
     st.subheader("1) Chế độ Tranh luận")
     modes = [
         "Tranh luận 2 AI (Tiêu chuẩn)",
@@ -1217,10 +1129,8 @@ def render_home():
         index=modes.index(st.session_state.config.mode) if st.session_state.config.mode in modes else 0
     )
     
-    # 2. Chủ đề tranh luận - PHẦN QUAN TRỌNG SỬA Ở ĐÂY
     st.subheader("2) Chủ đề tranh luận")
     
-    # --- HIỂN THỊ CHỦ ĐỀ ĐÃ CHỌN (ở trên cùng) ---
     col_info, col_clear = st.columns([4, 1])
     with col_info:
         if st.session_state.config.topic:
@@ -1243,12 +1153,9 @@ def render_home():
             st.session_state.config.topic = ""
             st.rerun()
     
-    # --- TABS RIÊNG BIỆT ---
     tab1, tab2, tab3 = st.tabs(["📝 Nhập thủ công", "💡 Gợi ý chủ đề", "🖼️ Phân tích hình ảnh"])
     
-    # **TAB 1: Nhập thủ công**
     with tab1:
-        # HÀM GỘP: Vừa hiển thị chủ đề hiện tại, vừa cho sửa
         current_topic = st.text_area(
             "Nhập hoặc chỉnh sửa chủ đề tranh luận:",
             value=st.session_state.config.topic,
@@ -1257,19 +1164,13 @@ def render_home():
             key="tab1_topic_input"
         )
         
-        col_apply, col_reset = st.columns([1, 1])
-        with col_apply:
-            if st.button("✅ Áp dụng", key="tab1_apply", use_container_width=True, disabled=not current_topic.strip()):
-                if current_topic.strip() != st.session_state.config.topic:
-                    st.session_state.config.topic = current_topic.strip()
-                    st.success(f"Đã cập nhật chủ đề!")
-                    st.rerun()
-        
-        with col_reset:
-            if st.button("↺ Reset", key="tab1_reset", use_container_width=True):
+        # ĐÃ XÓA NÚT RESET - CHỈ CÒN NÚT ÁP DỤNG
+        if st.button("✅ Áp dụng", key="tab1_apply", use_container_width=True, disabled=not current_topic.strip()):
+            if current_topic.strip() != st.session_state.config.topic:
+                st.session_state.config.topic = current_topic.strip()
+                st.success(f"Đã cập nhật chủ đề!")
                 st.rerun()
     
-    # **TAB 2: Gợi ý chủ đề**
     with tab2:
         st.write("AI sẽ đề xuất chủ đề tranh luận thú vị:")
         
@@ -1280,11 +1181,9 @@ def render_home():
                 st.session_state.image_analysis_result = None
                 st.rerun()
         
-        # Hiển thị chủ đề đề xuất
         if st.session_state.suggested_topics and not st.session_state.image_analysis_result:
             st.markdown("**Chủ đề đề xuất:**")
             
-            # Tạo các nút chọn riêng biệt - DỄ DÀNG NHẤT
             for i, topic in enumerate(st.session_state.suggested_topics):
                 col_btn, col_txt = st.columns([1, 4])
                 with col_btn:
@@ -1296,12 +1195,10 @@ def render_home():
                 with col_txt:
                     st.markdown(f"`{topic}`")
             
-            # Nút xóa danh sách
             if st.button("🗑️ Xóa danh sách gợi ý", key="clear_text_suggestions", use_container_width=True):
                 st.session_state.suggested_topics = None
                 st.rerun()
     
-    # **TAB 3: Phân tích hình ảnh**
     with tab3:
         st.write("Tải lên hình ảnh để AI phân tích và đề xuất chủ đề:")
         
@@ -1324,7 +1221,6 @@ def render_home():
                     st.write(f"- Định dạng: {uploaded_file.type}")
                     st.write(f"- Kích thước: {image.size[0]}x{image.size[1]} pixels")
                 
-                # Nút phân tích ảnh
                 if st.button("🔍 AI Phân tích ảnh", type="primary", use_container_width=True, key="analyze_image"):
                     with st.spinner("🤖 AI đang phân tích hình ảnh..."):
                         suggested_topics = analyze_image_for_topic(image)
@@ -1337,11 +1233,9 @@ def render_home():
             except Exception as e:
                 st.error(f"Lỗi khi mở ảnh: {str(e)}")
         
-        # Hiển thị kết quả phân tích ảnh
         if st.session_state.suggested_topics and st.session_state.image_analysis_result:
             st.markdown("**Chủ đề đề xuất từ hình ảnh:**")
             
-            # Tạo các nút chọn riêng biệt
             for i, topic in enumerate(st.session_state.suggested_topics):
                 col_btn, col_txt = st.columns([1, 4])
                 with col_btn:
@@ -1354,14 +1248,11 @@ def render_home():
                 with col_txt:
                     st.markdown(f"`{topic}`")
             
-            # Nút xóa danh sách
             if st.button("🗑️ Xóa danh sách", key="clear_image_suggestions", use_container_width=True):
                 st.session_state.suggested_topics = None
                 st.session_state.image_analysis_result = None
                 st.rerun()
     
-    # --- PHẦN CÒN LẠI GIỮ NGUYÊN ---
-    # 3. Phong cách
     st.subheader("3) Phong cách tranh luận")
     styles = [
         "Trang trọng – Học thuật", "Hài hước", "Hỗn loạn", 
@@ -1378,7 +1269,6 @@ def render_home():
     if st.session_state.config.style == "Khác":
         st.session_state.config.custom_style = st.text_input("Mô tả phong cách của bạn:")
     
-    # 4. Persona
     st.subheader("4) Tính cách các bên")
     
     col_a, col_b = st.columns(2)
@@ -1404,7 +1294,6 @@ def render_home():
             value=st.session_state.config.persona_c
         )
     
-    # Start button
     st.markdown("---")
     col_start, _ = st.columns([1, 3])
     with col_start:
@@ -1413,7 +1302,6 @@ def render_home():
                 st.error("Vui lòng nhập chủ đề tranh luận!")
                 return
             
-            # Reset state
             st.session_state.dialog_a = []
             st.session_state.dialog_b = []
             st.session_state.dialog_c = []
@@ -1433,7 +1321,6 @@ def render_home():
             st.rerun()
 
 def render_history():
-    """Trang lịch sử tranh luận"""
     st.title("📚 Kho tranh luận của bạn")
     
     if not st.session_state.current_user:
@@ -1462,8 +1349,7 @@ def render_history():
             st.rerun()
         return
     
-    # Hiển thị danh sách tranh luận
-    for i, debate in enumerate(reversed(user_debates[-10:])):  # Hiển thị 10 cái gần nhất
+    for i, debate in enumerate(reversed(user_debates[-10:])):
         with st.expander(f"🗣️ {debate['topic'][:60]}...", expanded=i==0):
             col1, col2, col3 = st.columns([3, 1, 1])
             
@@ -1479,14 +1365,12 @@ def render_history():
             
             with col3:
                 if st.button("🗑️ Xóa", key=f"delete_{debate['id']}", type="secondary", use_container_width=True):
-                    # Xóa khỏi danh sách
                     st.session_state.users_db[st.session_state.current_user]["debates"] = [
                         d for d in user_debates if d['id'] != debate['id']
                     ]
                     st.success("Đã xóa!")
                     st.rerun()
     
-    # Xuất tất cả dữ liệu
     st.markdown("---")
     if st.button("📥 Xuất tất cả dữ liệu (JSON)", use_container_width=True):
         data = {
@@ -1502,7 +1386,6 @@ def render_history():
         )
 
 def render_debate():
-    """Trang tranh luận chính - ĐÃ THÊM THANH TIẾN TRÌNH VÀ NÚT LƯU"""
     st.title("🔥 Cuộc tranh luận")
     
     config = st.session_state.config
@@ -1530,7 +1413,6 @@ def render_debate():
         
         st.markdown(html_content, unsafe_allow_html=True)
         
-        # Nút điều hướng
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🔙 Trang chủ", use_container_width=True, key="back_home"):
@@ -1543,14 +1425,12 @@ def render_debate():
         
         st.markdown("---")
         
-        # Thông tin user
         if st.session_state.current_user:
             if st.button("🚪 Đăng xuất", use_container_width=True):
                 handle_logout()
     
     st.header(f"Chủ đề: {st.session_state.topic_used}")
     
-    # === THÊM THANH TIẾN TRÌNH (TÍNH NĂNG 9) ===
     render_progress_bar()
     
     with st.container():
@@ -1570,13 +1450,10 @@ def render_debate():
     if config.mode == "Chế độ RPG (Game Tranh luận)":
         render_hp_display()
     
-    # Nút điều khiển (đã bỏ nút "Thêm 1 lượt")
     render_control_buttons()
     
-    # Ô input người dùng (đã thêm tính năng gợi ý)
     render_user_input()
     
-    # Hiển thị tin nhắn
     render_chat_messages()
     
     is_victory, victory_msg = check_victory()
@@ -1600,7 +1477,6 @@ def render_debate():
         st.markdown("---")
         
         if config.mode != "Tham gia 3 bên (Thành viên C)":
-            # THÊM: Nút lưu vào kho dữ liệu nếu đã đăng nhập
             if st.session_state.current_user:
                 col1, col2, col3, col4 = st.columns(4)
                 
@@ -1647,7 +1523,6 @@ def render_debate():
                         st.session_state.page = "home"
                         st.rerun()
             else:
-                # Nếu chưa đăng nhập
                 col1, col2, col3 = st.columns(3)
                 
                 with col1:
@@ -1692,29 +1567,24 @@ def render_debate():
             with st.container():
                 st.markdown(st.session_state.courtroom_analysis)
 
-# --- CSS Style ---
 CHAT_STYLE = """
 <style>
-/* RESET STYLES ĐỂ SIDEBAR HIỂN THỊ ĐÚNG */
 [data-testid="stSidebar"] {
     background-color: #0d1117 !important;
     color: #c9d1d9 !important;
 }
 
-/* Main app background */
 [data-testid="stAppViewContainer"] {
     background-color: #0d1117;
     color: #c9d1d9;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-/* Main content headings */
 h1, h2, h3, h4, h5, h6 {
     color: #c9d1d9;
     font-weight: 600;
 }
 
-/* Chat bubbles */
 .chat-bubble {
     padding: 15px 20px;
     border-radius: 18px;
@@ -1754,7 +1624,6 @@ h1, h2, h3, h4, h5, h6 {
     margin-top: 5px;
 }
 
-/* Sidebar styles - FIXED */
 [data-testid="stSidebar"] {
     background-color: #202329!important;
     color: #c9d1d9 !important;
@@ -1779,7 +1648,6 @@ h1, h2, h3, h4, h5, h6 {
     color: #c9d1d9 !important;
 }
 
-/* Button styles */
 .stButton > button {
     border-radius: 10px;
     font-weight: 600;
@@ -1793,7 +1661,6 @@ h1, h2, h3, h4, h5, h6 {
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 
-/* Custom scrollbar */
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -1813,12 +1680,10 @@ h1, h2, h3, h4, h5, h6 {
     background: #c9d1d9;
 }
 
-/* Streamlit default components */
 .stSelectbox, .stSlider, .stTextInput, .stTextArea {
     color: #c9d1d9 !important;
 }
 
-/* Success, Warning, Error messages */
 .stSuccess {
     background: linear-gradient(135deg, #0e4429 0%, #1f362d 100%);
     border-left: 5px solid #4cd964;
@@ -1843,7 +1708,6 @@ h1, h2, h3, h4, h5, h6 {
     color: #c9d1d9 !important;
 }
 
-/* Streamlit divider line style */
 hr {
     border: none;
     height: 1px;
@@ -1851,17 +1715,14 @@ hr {
     margin: 20px 0;
 }
 
-/* Fix spacing in containers */
 [data-testid="stVerticalBlock"] > div {
     padding: 0 !important;
 }
 
-/* Fix for sidebar spacing */
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
     gap: 10px !important;
 }
 
-/* Tabs styling */
 .stTabs [data-baseweb="tab-list"] {
     gap: 2px;
 }
@@ -1881,7 +1742,6 @@ hr {
     border-bottom: 3px solid #58a6ff !important;
 }
 
-/* Hiệu ứng chuyển tab mượt mà */
 .stTabs [data-baseweb="tab-list"] {
     gap: 2px;
     background-color: #0d1117;
@@ -1905,7 +1765,6 @@ hr {
     border-bottom: 3px solid #c9d1d9 !important;
 }
 
-/* Chủ đề đã chọn */
 .selected-topic-box {
     background-color: #1f362d;
     padding: 15px;
@@ -1922,7 +1781,6 @@ hr {
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
 }
 
-/* Đảm bảo sidebar components hiển thị đúng */
 div[data-baseweb="select"] > div {
     background-color: #1e2d42 !important;
     color: #c9d1d9 !important;
@@ -1933,12 +1791,10 @@ div[data-baseweb="slider"] {
     color: #c9d1d9 !important;
 }
 
-/* Fix label colors in sidebar */
 [data-testid="stSidebar"] label {
     color: #c9d1d9 !important;
 }
 
-/* Fix for select options */
 [role="listbox"] {
     background-color: #1e2d42 !important;
     color: #c9d1d9 !important;
@@ -1952,7 +1808,6 @@ div[data-baseweb="slider"] {
     background-color: #2a3f5f !important;
 }
 
-/* Progress bar styling */
 .stProgress > div > div > div > div {
     background: linear-gradient(to right, #58a6ff, #8bb8e8) !important;
 }
@@ -1964,9 +1819,7 @@ div[data-baseweb="slider"] {
 </style>
 """
 
-# --- Main App ---
 def main():
-    """Hàm chính điều hướng ứng dụng"""
     st.set_page_config(
         page_title="🤖 AI Debate Bot",
         layout="wide",
@@ -1978,14 +1831,11 @@ def main():
         }
     )
     
-    # Áp dụng CSS
     st.markdown(CHAT_STYLE, unsafe_allow_html=True)
     
-    # Kiểm tra nếu chưa có trang, mặc định là login
     if "page" not in st.session_state:
         st.session_state.page = "login"
     
-    # Điều hướng trang
     if st.session_state.page == "login":
         render_login()
     elif st.session_state.page == "home":
@@ -1995,7 +1845,6 @@ def main():
     elif st.session_state.page == "history":
         render_history()
     
-    # Xử lý nút tiếp tục cho AI vs AI
     if st.session_state.get("_trigger_continue", False):
         st.session_state._trigger_continue = False
         add_ai_turn_auto()
