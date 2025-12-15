@@ -487,7 +487,6 @@ def add_ai_turn_auto():
         apply_rpg_damage("B", "A", reply_b)
 
     debate_state.turn_count += 1
-    # QUAN TRỌNG: Cập nhật current_display_index để hiển thị đúng
     debate_state.current_display_index += 1
 
 def process_user_reply(user_role: str, message: str):
@@ -687,7 +686,6 @@ def render_control_buttons():
                 else:
                     with st.spinner("Đang thêm lượt tranh luận..."):
                         add_ai_turn_auto()
-                        # KHÔNG tăng current_display_index ở đây nữa vì đã tăng trong add_ai_turn_auto()
                         
                         is_victory, victory_msg = check_victory()
                         if is_victory:
@@ -708,14 +706,35 @@ def render_control_buttons():
                         debate_state.is_fast_mode = True
                         
                         target_rounds = config.rounds
+                        current_rounds = len(st.session_state.dialog_a)
                         
-                        with st.spinner(f"Đang tua nhanh đến {target_rounds} lượt..."):
-                            while len(st.session_state.dialog_a) < target_rounds:
+                        # Tạo một placeholder để hiển thị tiến trình
+                        progress_text = st.empty()
+                        progress_bar = st.empty()
+                        
+                        try:
+                            # Chạy vòng lặp một lần duy nhất và hiển thị tiến trình
+                            for i in range(current_rounds, target_rounds):
+                                progress = (i - current_rounds + 1) / (target_rounds - current_rounds)
+                                progress_text.text(f"Đang tua nhanh... ({i+1}/{target_rounds})")
+                                progress_bar.progress(progress)
+                                
+                                # Thêm một lượt tranh luận
                                 add_ai_turn_auto()
-                                time.sleep(0.1)
+                            
+                            # Hoàn thành
+                            progress_text.text("✅ Đã tua nhanh xong!")
+                            time.sleep(0.5)
+                            
+                        except Exception as e:
+                            st.error(f"Lỗi khi tua nhanh: {str(e)}")
+                        
+                        finally:
+                            # Xóa các placeholder
+                            progress_text.empty()
+                            progress_bar.empty()
                         
                         debate_state.is_fast_mode = False
-                        # CẬP NHẬT: Đảm bảo current_display_index hiển thị tất cả
                         debate_state.current_display_index = len(st.session_state.dialog_a)
                         st.session_state.debate_finished = True
                         st.session_state.debate_running = False
@@ -889,7 +908,6 @@ def render_chat_messages():
     dialog_b = st.session_state.dialog_b
     dialog_c = st.session_state.dialog_c
 
-    # Tính số lượt cần hiển thị
     if config.mode == "Tranh luận 1v1 với AI":
         display_rounds = len(dialog_a)
     else:
@@ -897,7 +915,6 @@ def render_chat_messages():
         if debate_state.is_fast_mode:
             display_rounds = max_rounds
         else:
-            # Sử dụng current_display_index để hiển thị đúng số lượt
             display_rounds = min(debate_state.current_display_index, max_rounds)
 
     for i in range(display_rounds):
@@ -1244,7 +1261,8 @@ def render_home():
             for i, topic in enumerate(st.session_state.suggested_topics):
                 col_btn, col_txt = st.columns([1, 4])
                 with col_btn:
-                    if st.button(f"Chọn ảnh #{i+1}", key=f"select_image_topic_{i}", use_container_width=True):
+                    # SỬA Ở ĐÂY: "Chọn ảnh #1" thành "Chọn #1"
+                    if st.button(f"Chọn #{i+1}", key=f"select_image_topic_{i}", use_container_width=True):
                         st.session_state.config.topic = topic
                         st.success(f"Đã chọn: {topic}")
                         st.session_state.suggested_topics = None
